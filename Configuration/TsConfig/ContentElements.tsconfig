@@ -1,0 +1,170 @@
+mod.wizards.newContentElement.wizardItems {
+  kitodo {
+    header = Kitodo Plugins
+    elements {
+      tx_dlf_audioplayer {
+        iconIdentifier = tx-dlf-audioplayer
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.audioplayer.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.audioplayer.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_audioplayer
+        }
+      }
+      tx_dlf_basket {
+        iconIdentifier = tx-dlf-basket
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.basket.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.basket.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_basket
+        }
+      }
+      tx_dlf_calendar {
+        iconIdentifier = tx-dlf-calendar
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.calendar.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.calendar.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_calendar
+        }
+      }
+      tx_dlf_collection {
+        iconIdentifier = tx-dlf-collection
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.collection.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.collection.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_collection
+        }
+      }
+      tx_dlf_embedded3dviewer {
+        iconIdentifier = tx-dlf-embedded3dviewer
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.embedded3dviewer.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.embedded3dviewer.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_embedded3dviewer
+        }
+      }
+      tx_dlf_feeds {
+        iconIdentifier = tx-dlf-feeds
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.feeds.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.feeds.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_feeds
+        }
+      }
+      tx_dlf_listview {
+        iconIdentifier = tx-dlf-listview
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.listview.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.listview.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_listview
+        }
+      }
+      tx_dlf_mediaplayer {
+        iconIdentifier = tx-dlf-mediaplayer
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.mediaplayer.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.mediaplayer.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_mediaplayer
+        }
+      }
+      tx_dlf_metadata {
+        iconIdentifier = tx-dlf-metadata
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.metadata.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.metadata.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_metadata
+        }
+      }
+      tx_dlf_navigation {
+        iconIdentifier = tx-dlf-navigation
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.navigation.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.navigation.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_navigation
+        }
+      }
+      tx_dlf_oaipmh {
+        iconIdentifier = tx-dlf-oaipmh
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.oaipmh.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.oaipmh.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_oaipmh
+        }
+      }
+      tx_dlf_pagegrid {
+        iconIdentifier = tx-dlf-pagegrid
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.pagegrid.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.pagegrid.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_pagegrid
+        }
+      }
+      tx_dlf_pageview {
+        iconIdentifier = tx-dlf-pageview
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.pageview.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.pageview.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_pageview
+        }
+      }
+      tx_dlf_search {
+        iconIdentifier = tx-dlf-search
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.search.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.search.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_search
+        }
+      }
+      tx_dlf_statistics {
+        iconIdentifier = tx-dlf-statistics
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.statistics.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.statistics.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_statistics
+        }
+      }
+      tx_dlf_tableofcontents {
+        iconIdentifier = tx-dlf-tableofcontents
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.tableofcontents.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.tableofcontents.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_tableofcontents
+        }
+      }
+      tx_dlf_toolbox {
+        iconIdentifier = tx-dlf-toolbox
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.toolbox.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.toolbox.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_toolbox
+        }
+      }
+      tx_dlf_validationform {
+        iconIdentifier = tx-dlf-validationform
+        title = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.validationform.title
+        description = LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:plugins.validationform.description
+        tt_content_defValues {
+          CType = list
+          list_type = dlf_validationform
+        }
+      }
+    }
+    show = *
+  }
+}

@@ -1,0 +1,154 @@
+# Model database table mapping
+plugin.tx_dlf {
+    persistence {
+        storagePid = {$plugin.tx_dlf.persistence.storagePid}
+        solrCoreUid = {$plugin.tx_dlf.persistence.solrCoreUid}
+    }
+    settings {
+        storagePid = {$plugin.tx_dlf.persistence.storagePid}
+        solrCoreUid = {$plugin.tx_dlf.persistence.solrCoreUid}
+    }
+}
+
+config {
+    # concatenate all JavaScript files by default
+    concatenateJs = 1
+    # concatenate all CSS files by default
+    concatenateCss = 1
+}
+
+page {
+  includeCSS {
+    embedded3dviewer = EXT:dlf/Resources/Public/Stylesheets/embedded-3d-viewer.css
+    jPlayer = EXT:dlf/Resources/Public/JavaScript/jPlayer/blue.monday/css/jplayer.blue.monday.min.css
+    openLayers = EXT:dlf/Resources/Public/JavaScript/OpenLayers/openlayers.css
+    gridstack = EXT:dlf/Resources/Public/JavaScript/Gridstack/gridstack.min.css
+  }
+
+  includeJSFooterlibs {
+    jQuery = EXT:dlf/Resources/Public/JavaScript/jQuery/jquery-3.6.0.min.js
+    jQuery.forceOnTop = 1
+    jQueryJPlayer = EXT:dlf/Resources/Public/JavaScript/jPlayer/jquery.jplayer.min.js
+    jQueryUiMouseSlider = EXT:dlf/Resources/Public/JavaScript/jQueryUI/jquery-ui-mouse-slider-resizable-autocomplete.js
+  }
+
+  includeJSFooter {
+    # AudioPlayer plugin
+    kitodo-audioPlayer = EXT:dlf/Resources/Public/JavaScript/AudioPlayer/AudioPlayer.js
+
+    # ValidationForm plugin
+    kitodo-validationForm = EXT:dlf/Resources/Public/JavaScript/ValidationForm/ValidationForm.js
+
+    # Verovio plugin
+    kitodo-verovio = EXT:dlf/Resources/Public/JavaScript/Verovio/verovio-toolkit.js
+    kitodo-svgtopdfkit = EXT:dlf/Resources/Public/JavaScript/Verovio/svgtopdfkit.js
+    kitodo-saveas = EXT:dlf/Resources/Public/JavaScript/Verovio/saveas.js
+    kitodo-pdf= EXT:dlf/Resources/Public/JavaScript/Verovio/pdfkit.js
+    kitodo-pdfkita = EXT:dlf/Resources/Public/JavaScript/Verovio/blobstream.js
+    kitodo-wildWebMidi = EXT:dlf/Resources/Public/JavaScript/WildWebMidi/wildwebmidi.js
+    kitodo-webAudioPlayer = EXT:dlf/Resources/Public/JavaScript/WildWebMidi/web_audio_player.js
+
+    # PageView plugin
+    kitodo-openLayers = EXT:dlf/Resources/Public/JavaScript/OpenLayers/openlayers.js
+
+    kitodo-pageView-utility = EXT:dlf/Resources/Public/JavaScript/PageView/Utility.js
+    kitodo-pageView-ol = EXT:dlf/Resources/Public/JavaScript/PageView/OL.js
+    kitodo-pageView-olStyles = EXT:dlf/Resources/Public/JavaScript/PageView/OLStyles.js
+    kitodo-pageView-olSources = EXT:dlf/Resources/Public/JavaScript/PageView/OLSources.js
+    kitodo-pageView-altoParser = EXT:dlf/Resources/Public/JavaScript/PageView/AltoParser.js
+    kitodo-pageView-annotationParser = EXT:dlf/Resources/Public/JavaScript/PageView/AnnotationParser.js
+    kitodo-pageView-annotationControl = EXT:dlf/Resources/Public/JavaScript/PageView/AnnotationControl.js
+    kitodo-pageView-imageManipulationControl = EXT:dlf/Resources/Public/JavaScript/PageView/ImageManipulationControl.js
+    kitodo-pageView-fullTextDownloadControl = EXT:dlf/Resources/Public/JavaScript/PageView/FulltextDownloadControl.js
+    kitodo-pageView-fullTextControl = EXT:dlf/Resources/Public/JavaScript/PageView/FulltextControl.js
+    kitodo-pageView-fullTextUtility = EXT:dlf/Resources/Public/JavaScript/PageView/FullTextUtility.js
+    kitodo-pageView-scoreControl = EXT:dlf/Resources/Public/JavaScript/PageView/ScoreControl.js
+    kitodo-pageView-scoreUtility = EXT:dlf/Resources/Public/JavaScript/PageView/ScoreUtility.js
+    kitodo-pageView-syncControl = EXT:dlf/Resources/Public/JavaScript/PageView/SyncControl.js
+    kitodo-pageView-searchInDocument = EXT:dlf/Resources/Public/JavaScript/PageView/SearchInDocument.js
+    kitodo-pageView-pageView = EXT:dlf/Resources/Public/JavaScript/PageView/PageView.js
+    kitodo-pageView-teiParser = EXT:dlf/Resources/Public/JavaScript/PageView/TeiParser.js
+    kitodo-pageview-multiViewAddSource = EXT:dlf/Resources/Public/JavaScript/MultiView/MultViewAddSource.js
+    kitodo-search-suggest = EXT:dlf/Resources/Public/JavaScript/Search/Suggester.js
+  }
+}
+
+[request && like(traverse(request.getQueryParams(), 'tx_dlf/multiview'), '1')]
+page.includeJSFooter {
+    # MultiView plugin
+    gridstack = EXT:dlf/Resources/Public/JavaScript/Gridstack/gridstack-all.js
+    kitodo-multiview = EXT:dlf/Resources/Public/JavaScript/MultiView/MultiView.js
+}
+[end]
+
+plugin.tx_dlf_pagegrid {
+    settings {
+        paginate {
+            itemsPerPage = 10
+            insertAbove = 1
+            insertBelow = 1
+            lessPages = 1
+            forcedNumberOfLinks = 5
+            pagesBefore = 3
+            pagesAfter = 3
+            section =
+        }
+    }
+}
+
+plugin.tx_dlf_listview {
+    settings {
+        list.paginate {
+            itemsPerPage = 25
+            insertAbove = 1
+            insertBelow = 1
+            maximumNumberOfLinks = 10
+            section = showResults
+        }
+    }
+}
+
+plugin.tx_dlf_collection {
+    settings {
+        list.paginate {
+            itemsPerPage = 25
+            insertAbove = 1
+            insertBelow = 1
+            maximumNumberOfLinks = 10
+            section = showResults
+        }
+    }
+}
+
+plugin.tx_dlf_search {
+    settings {
+        list.paginate {
+            itemsPerPage = 25
+            insertAbove = 1
+            insertBelow = 1
+            maximumNumberOfLinks = 10
+            section = showResults
+        }
+    }
+}
+
+plugin.tx_dlf_annotation {
+    settings {
+      apiUrl =
+    }
+}
+
+plugin.tx_dlf_tableofcontents {
+    settings {
+        titleReplacements {
+            0 {
+                type = issue
+                fields = type,year
+            }
+            1 {
+                type = volume
+                fields = type,volume
+            }
+        }
+    }
+}

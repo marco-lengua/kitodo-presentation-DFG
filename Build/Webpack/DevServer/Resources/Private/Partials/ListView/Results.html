@@ -1,0 +1,132 @@
+<f:comment>
+<!--
+ * (c) Kitodo. Key to digital objects e.V. <contact@kitodo.org>
+ *
+ * This file is part of the Kitodo and TYPO3 projects.
+ *
+ * @license GNU General Public License version 3 or later.
+ * For the full copyright and license information, please read the
+ * LICENSE.txt file that was distributed with this source code.
+-->
+</f:comment>
+<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"
+      xmlns:kitodo="http://typo3.org/ns/Kitodo/Dlf/ViewHelpers"
+      data-namespace-typo3-fluid="true">
+
+    <f:variable name="currentPage" value="{pagination.currentPageNumber - 1}" />
+    <f:variable name="pageOffset" value="{settings.list.paginate.itemsPerPage * currentPage}" />
+    <ol class="tx-dlf-abstracts">
+        <f:for each="{paginator.paginatedItems}" as="document" iteration="docIterator">
+            <f:variable name="metadataTitle" value="{f:if(condition:'{document.title}', then:'{document.title}', else:'{document.metsOrderlabel}')}" />
+            <f:variable name="docTitle" value="{f:if(condition:'{metadataTitle}', then:'{metadataTitle}', else:'{f:translate(key: \'noTitle\')}')}" />
+            <li value="{settings.list.paginate.itemsPerPage * pageOffset + docIterator.index}">
+            <f:link.page
+            pageUid="{settings.targetPidPageView}"
+            additionalParams="{tx_dlf:{page:'{document.page}', double:'0', id:'{document.uid}', pagegrid:'0'}}"
+            class=""
+            title="{docTitle}">
+                <f:render partial="ListView/ResultsThumbnailMetadata" arguments="{title: docTitle, thumbnail: document.thumbnail}" />
+                <dl>
+                    <f:render partial="ListView/ResultsTitleMetadata" arguments="{title: docTitle}" />
+                    <f:if condition="{document.metadata}">
+                        <f:then>
+                            <f:render partial="ListView/ResultsMetadata" arguments="{listedMetadata: listedMetadata, resultMetadata: document.metadata}" />
+                            <f:if condition="{document.structure} == 'year'">
+                                <dt class="tx-dlf-metadata-year"><f:translate key='LLL:EXT:dlf/Resources/Private/Language/locallang_metadata.xlf:metadata.year' /></dt>
+                                <dd class="tx-dlf-metadata-year">{document.metsOrderlabel}</dd>
+                            </f:if>
+                        </f:then>
+                        <f:else>
+                            <p class="error">No metadata for document with uid={document.uid}</p>
+                        </f:else>
+                    </f:if>
+                    <f:render partial="ListView/ResultsTypeMetadata" arguments="{type: document.structure}" />
+                </dl>
+            </f:link.page>
+
+            <f:render partial="Basket/AddToBasket" arguments="{result: document}" />
+
+            <f:if condition="{document.children} || {document.searchResults}">
+                <button class="tx-dlf-morevolumes" title="{f:translate(key='listview.moredetails.toggle')}"><f:translate key='listview.moredetails.toggle' /></button>
+            </f:if>
+            <f:if condition="{document.children}">
+                <ol class="tx-dlf-volume">
+                    <f:for each="{document.children}" as="child" iteration="childIterator">
+                        <f:if condition="{document.structure} == 'ephemera' || {document.structure} == 'newspaper'">
+                        <f:then>
+                            <f:comment>Special output for Newspaper / Ephemera</f:comment>
+                            <f:variable name="newspaperTitle" value="{f:if(condition:'{child.metsOrderlabel}', then:'{child.metsOrderlabel}', else:'[{document.title}]')}" />
+                            <li value="{childIterator.cycle}" class="years">
+                                <f:link.page
+                                pageUid="{settings.targetPidPageView}"
+                                additionalParams="{tx_dlf:{page:'1', double:'0', id:'{child.uid}', pagegrid:'0'}}"
+                                class=""
+                                title="{newspaperTitle}">{newspaperTitle}</f:link.page>
+                            </li>
+                        </f:then>
+                        <f:else>
+                            <f:variable name="childTitle" value="{f:if(condition:'{child.title}', then:'{child.title}', else:'[{document.title}]')}" />
+                            <li value="{childIterator.cycle}" class="pageresult">
+                                <f:link.page
+                                pageUid="{settings.targetPidPageView}"
+                                additionalParams="{tx_dlf:{page:'1', double:'0', id:'{child.uid}', pagegrid:'0'}}"
+                                class=""
+                                title="{childTitle}">
+                                    <f:render partial="ListView/ResultsThumbnailMetadata" arguments="{title: childTitle, thumbnail: child.thumbnail}" />
+                                    <dl>
+                                        <f:render partial="ListView/ResultsTitleMetadata" arguments="{title: childTitle}" />
+                                        <f:render partial="ListView/ResultsMetadata" arguments="{listedMetadata: listedMetadata, resultMetadata: child.metadata}" />
+                                        <f:render partial="ListView/ResultsTypeMetadata" arguments="{type: child.structure}" />
+                                    </dl>
+                                </f:link.page>
+
+                                <f:render partial="Basket/AddToBasket" arguments="{result: child}" />
+
+                            </li>
+                        </f:else>
+                        </f:if>
+                    </f:for>
+                </ol>
+            </f:if>
+
+            <f:if condition="{document.searchResults}">
+                <ol class="tx-dlf-volume">
+                    <f:for each="{document.searchResults}" as="result" iteration="resultIterator">
+                        <f:variable name="docTitle" value="{f:if(condition:'{result.title}', then:'{result.title}', else:'[{document.title}]')}" />
+                        <li value="{resultIterator.cycle}" class="pageresult">
+                            <f:link.page
+                                pageUid="{settings.targetPidPageView}"
+                                additionalParams="{tx_dlf:{page:'{result.page}', double:'0', id:'{document.uid}', pagegrid:'0', highlight_word: '{result.highlight_word}'}}"
+                                class=""
+                                title="{docTitle}, Seite {result.page}">
+                                <f:render partial="ListView/ResultsThumbnailMetadata" arguments="{title: docTitle, thumbnail: result.thumbnail}" />
+                                <dl>
+                                    <f:if condition="{result.title}">
+                                        <f:render partial="ListView/ResultsTitleMetadata" arguments="{title: result.title}" />
+                                    </f:if>
+                                    <f:if condition="{result.structure} != 'page'">
+                                        <f:render partial="ListView/ResultsTypeMetadata" arguments="{type: result.structure}" />
+                                    </f:if>
+                                    <dt class="tx-dlf-page"><f:translate key='LLL:EXT:dlf/Resources/Private/Language/locallang_structure.xlf:structure.page' /></dt>
+                                    <dd class="tx-dlf-page">{result.page}</dd>
+                                    <f:render partial="ListView/ResultsMetadata" arguments="{listedMetadata: listedMetadata, resultMetadata: result.metadata}" />
+                                </dl>
+                                <div class="tx-dlf-listview-preview">
+                                    <f:if condition="{result.snippet}">
+                                        <p class="textsnippet">[...] <f:format.raw>{result.snippet}</f:format.raw> [...]</p>
+                                    </f:if>
+                                </div>
+                            </f:link.page>
+
+                            <f:render partial="Basket/AddToBasket" arguments="{result: {uid:document.uid, page: result.page}}" />
+
+                        </li>
+                    </f:for>
+                </ol>
+            </f:if>
+            </li>
+        </f:for>
+    </ol>
+    <f:render partial="Lists/Pagination" arguments="{_all}" />
+
+</html>

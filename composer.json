@@ -1,0 +1,138 @@
+{
+  "name": "kitodo/presentation",
+  "description": "Base plugins, modules, services and API of the Digital Library Framework. It is part of the community-based Kitodo Digitization Suite.",
+  "type": "typo3-cms-extension",
+  "homepage": "https://www.kitodo.org",
+  "readme": "README.md",
+  "license": ["GPL-3.0-or-later"],
+  "authors": [
+    {
+      "name": "Kitodo. Key to digital objects e.V.",
+      "email": "contact@kitodo.org",
+      "homepage": "https://www.kitodo.org",
+      "role": "provider"
+    },
+    {
+      "name": "Sebastian Meyer",
+      "email": "sebastian.meyer@opencultureconsulting.com",
+      "homepage": "https://www.opencultureconsulting.com",
+      "role": "maintainer"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/kitodo/kitodo-presentation/issues",
+    "source": "https://github.com/kitodo/kitodo-presentation",
+    "docs": "https://docs.typo3.org/p/kitodo/presentation/main/en-us/"
+  },
+  "require": {
+    "php": "8.2 - 8.4",
+    "ext-curl": "*",
+    "ext-dom": "*",
+    "ext-json": "*",
+    "ext-libxml": "*",
+    "ext-openssl": "*",
+    "ext-simplexml": "*",
+    "typo3/cms-core": "^12.4|^13.4",
+    "typo3/cms-extbase": "^12.4|^13.4",
+    "typo3/cms-install": "^12.4|^13.4",
+    "typo3/cms-scheduler": "^12.4|^13.4",
+    "typo3/cms-tstemplate": "^12.4|^13.4",
+    "caseyamcl/phpoaipmh": "^3.3",
+    "slub/php-mods-reader": "^0.4",
+    "ubl/php-iiif-prezi-reader": "0.3.2",
+    "solarium/solarium": "^6.4",
+    "softcreatr/jsonpath": "^0.10",
+    "symfony/process": "^7.3"
+  },
+  "require-dev": {
+    "fluidtypo3/vhs": "^7.1",
+    "phpstan/phpstan": "^1.12",
+    "phpunit/phpunit": "^10.5",
+    "spatie/phpunit-watcher": "^1.24",
+    "typo3/cms-backend": "^12.4|^13.4",
+    "typo3/cms-fluid": "^12.4|^13.4",
+    "typo3/cms-fluid-styled-content": "^12.4|^13.4",
+    "typo3/cms-frontend": "^12.4|^13.4",
+    "typo3/testing-framework": "^8.3",
+    "vlucas/phpdotenv": "^5.6"
+  },
+  "replace": {
+    "typo3-ter/dlf": "self.version"
+  },
+  "autoload": {
+    "psr-4": {
+      "Kitodo\\Dlf\\": "Classes/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Kitodo\\Dlf\\Tests\\": "Tests/"
+    }
+  },
+  "extra": {
+    "typo3/cms": {
+      "extension-key": "dlf",
+      "web-dir": "public"
+    }
+  },
+  "scripts": {
+    "post-autoload-dump": [
+      "mkdir -p public/typo3conf/ext/",
+      "rm -f public/typo3conf/ext/dlf",
+      "ln -s ../../../ public/typo3conf/ext/dlf"
+    ],
+    "test": [
+      "@test:unit",
+      "@test:func"
+    ],
+	"install-via-docker": [
+		"Build/Test/runTests.sh -s composerInstall"
+	],
+    "test:unit": [
+		"Build/Test/runTests.sh -s unit"
+	],
+    "test:unit:local": [
+		"phpunit -c Build/Test/UnitTests.xml"
+	],
+    "test:unit:watch": [
+		"phpunit-watcher watch -c Build/Test/UnitTests.xml"
+	],
+    "test:func": [
+		"Build/Test/runTests.sh -s functional"
+	],
+    "test:func:watch": [
+		"@test:func -w"
+	],
+  	"docs:build": [
+	  	"rm -Rf ./Documentation-GENERATED-temp",
+	  	"docker run --user=$(id -u):$(id -g) --rm -v ./:/project -it ghcr.io/typo3-documentation/render-guides:latest --config ./Documentation",
+	  	"cp ./Build/Documentation/index.html ./Documentation-GENERATED-temp"
+  	],
+	"docs:start": [
+		"docker run -d --name dlf_docs --rm -v ./Documentation-GENERATED-temp:/serve -p 9000:8000 jdkelley/simple-http-server:latest"
+	],
+	"docs:stop": [
+		"docker stop dlf_docs"
+	],
+	"docs:rebuild": [
+	  	"@composer docs:stop",
+	  	"@composer docs:build",
+	  	"@composer docs:start"
+	],
+	"phpstan": [
+		"@php vendor/bin/phpstan --configuration=\".github/phpstan_13.4.neon\""
+	]
+  },
+  "config": {
+    "allow-plugins": {
+      "typo3/class-alias-loader": true,
+      "typo3/cms-composer-installers": true
+    }
+  },
+  "repositories": [
+    {
+      "type": "github",
+      "url": "https://github.com/kitodo/php-iiif-prezi-reader.git"
+    }
+  ]
+}

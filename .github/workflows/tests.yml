@@ -1,0 +1,33 @@
+name: Unit and Functional Testing
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: TYPO3
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        variants: [ {typo3: 12.4, php: 8.2}, {typo3: 12.4, php: 8.4}, {typo3: 13.4, php: 8.2}, {typo3: 13.4, php: 8.4}  ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: Build/Test/runTests.sh -s composerInstall -t ${{ matrix.variants.typo3 }} -p ${{ matrix.variants.php }}
+
+      - name: Run unit tests
+        run: Build/Test/runTests.sh -s unit -p ${{ matrix.variants.php }}
+
+      - name: Run functional tests
+        run: Build/Test/runTests.sh -s functional -p ${{ matrix.variants.php }}
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
