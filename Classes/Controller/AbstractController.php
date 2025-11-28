@@ -16,6 +16,7 @@ use Kitodo\Dlf\Common\Helper;
 use Kitodo\Dlf\Configuration\UseGroupsConfiguration;
 use Kitodo\Dlf\Domain\Model\Document;
 use Kitodo\Dlf\Domain\Repository\DocumentRepository;
+use Kitodo\Dlf\Service\DocumentService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerAwareTrait;
@@ -53,6 +54,22 @@ abstract class AbstractController extends ActionController implements LoggerAwar
      */
     protected DocumentRepository $documentRepository;
 
+    /** @access protected
+    * @var DocumentService
+    */
+   protected DocumentService $documentService;
+    /**
+     * @access public
+     *
+     * @param DocumentService $documentService
+     *
+     * @return void
+     */
+    public function injectDocumentService(DocumentService $documentService): void
+    {
+       $this->documentService = $documentService;
+
+    }
     /**
      * @access public
      *
@@ -242,59 +259,24 @@ abstract class AbstractController extends ActionController implements LoggerAwar
             }
         }
     }
-
     /**
-     * Loads the current document into $this->document
-     *
+     * Loads the current document into $this->document just once
+     * 
      * @access protected
-     *
-     * @param string $documentId The document's UID or URL (id), fallback: record ID (recordId)
-     *
-     * @return void
+     * 
+     * @return  void
      */
-    protected function loadDocument(string $documentId = ''): void
+    protected function loadDocument(): void
     {
-        // Sanitize FlexForm settings to avoid later casting.
-        $this->sanitizeSettings();
-
-        // Get document ID from request data if not passed as parameter.
-        if (!$documentId && !empty($this->requestData['id'])) {
-            $documentId = $this->requestData['id'];
-        }
-
-        // Try to get document format from database
-        if (!empty($documentId)) {
-
-
-            $doc = null;
-
-            if (MathUtility::canBeInterpretedAsInteger($documentId)) {
-                $doc = $this->getDocumentByUid((int) $documentId);
-            } elseif (GeneralUtility::isValidUrl($documentId)) {
-                $doc = $this->getDocumentByUrl($documentId);
-            }
-
-            if ($this->document !== null && $doc !== null) {
-                $this->document->setCurrentDocument($doc);
-            }
-
-        } elseif (!empty($this->requestData['recordId'])) {
-
-            $this->document = $this->documentRepository->findOneBy(['recordId' => $this->requestData['recordId']]);
-
-            if ($this->document !== null) {
-                $doc = AbstractDocument::getInstance($this->document->getLocation(), $this->settings);
-                if ($doc !== null) {
-                    $this->document->setCurrentDocument($doc);
-                } else {
-                    $this->logger->error('Failed to load document with record ID "' . $this->requestData['recordId'] . '"');
-                }
-            }
+        if (isset($GLOBALS['TX_DLF_TEMP_DOCUMENT'])) {
+            $this->document = $GLOBALS['TX_DLF_TEMP_DOCUMENT'];
         } else {
-            $this->logger->error('Invalid ID "' . $documentId . '" or PID "' . $this->settings['storagePid'] . '" for document loading');
+            $this->sanitizeSettings();
+            $this->documentService->serviceLoadDocument($this->requestData['id'], $this->settings);
+            $this->document = $this->documentService->getDocument();
+            $GLOBALS['TX_DLF_TEMP_DOCUMENT'] = $this->document;
         }
     }
-
     /**
      * Configure URL for proxy.
      *
@@ -717,36 +699,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
             'pagesR' => $pagesSect
         ];
     }
-
-    /**
-     * Get document from repository by uid.
-     *
-     * @access private
-     *
-     * @param int $documentId The document's UID
-     *
-     * @return AbstractDocument
-     */
-    private function getDocumentByUid(int $documentId)
-    {
-        $doc = null;
-        $this->document = $this->documentRepository->findOneByIdAndSettings($documentId);
-
-        if ($this->document) {
-            $doc = AbstractDocument::getInstance($this->document->getLocation(), $this->settings);
-            if ($doc !== null) {
-                $doc->configPid = $this->document->getPid();
-                $this->buildMultiViewDocuments($this->document->getLocation(), $doc);
-            }
-        }
-
-        if (!$this->document || $doc === null) {
-            $this->logger->error('Invalid UID "' . $documentId . '" or PID "' . $this->settings['storagePid'] . '" for document loading');
-        }
-
-        return $doc;
-    }
-
+    
     /**
      * Get document by URL.
      *
