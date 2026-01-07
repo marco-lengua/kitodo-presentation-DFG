@@ -13,6 +13,7 @@ namespace Kitodo\Dlf\Controller;
 
 use Kitodo\Dlf\Common\Helper;
 use Kitodo\Dlf\Common\MetsDocument;
+use Kitodo\Dlf\Domain\Model\TocClickForm;
 use Psr\Http\Message\ResponseInterface;
 use TYPO3\CMS\Core\Utility\MathUtility;
 
@@ -34,6 +35,26 @@ class TableOfContentsController extends AbstractController
      */
     protected array $activeEntries = [];
 
+    public function tocClickAction(?TocClickForm $tocClickForm = null): ResponseInterface
+    {
+        if ($tocClickForm) {
+            $uri = $this->uriBuilder->reset()
+                ->setArguments(
+                    [
+                        'tx_dlf' => [
+                            'id' => $tocClickForm->getId(),
+                            'page' => $tocClickForm->getPage(),
+                            'double' => $tocClickForm->getDouble()
+                        ]
+                    ]
+                )
+                ->uriFor('main');
+            return $this->redirectToUri($uri);
+        }
+
+        return $this->htmlResponse();
+    }
+
     /**
      * The main method of the plugin
      *
@@ -53,10 +74,10 @@ class TableOfContentsController extends AbstractController
 
             $this->view->assign('toc', $this->makeMenuArray());
         }
-
         $this->view->assign('viewData', $this->viewData);
         return $this->htmlResponse();
     }
+
 
     /**
      * This builds a menu array for HMENU

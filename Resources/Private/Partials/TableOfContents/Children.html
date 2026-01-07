@@ -34,26 +34,18 @@
             <li class="tx-dlf-toc-no">
         </f:defaultCase>
     </f:switch>
-
-    <f:if condition="{child.doNotLinkIt}">
-        <f:then>
-            <span class="a">
-                <f:render partial="TableOfContents/Title" arguments="{child: child}"/>
-            </span>
-        </f:then>
-        <f:else>
-            <kitodo:link
-                viewData="{viewData}"
-                pageUid="{settings.targetPid}"
-                additionalParams="{f:if(condition:'{child.id}', then:'{\'id\':child.id, \'page\':child.page}', else: '{\'page\':child.page}')}"
-                excludedParams="{0: 'measure', 1: 'multiview'}"
-                section="{child.section}"
-                title="{f:if(condition:'{child.title}', then: '{child.title}', else: '{child.type}')}">
-                    <f:render partial="TableOfContents/Title" arguments="{child: child}"/>
-            </kitodo:link>
-        </f:else>
-    </f:if>
-
+    <f:form method="post" action="tocClick" controller="TableOfContents" name="tocClickForm" object="{tocClickForm}" addQueryString="untrusted">
+        <f:if condition="{viewData.requestData.id}">
+            <f:form.hidden property="id" value="{viewData.requestData.id}"/>
+        </f:if>
+        <f:if condition="{viewData.requestData.double}">
+           <f:form.hidden property="double" value="{viewData.requestData.double}"/>
+        </f:if>
+        <label for="fname"><f:render partial="TableOfContents/Title" arguments="{child: child}"/></label>
+        <f:if condition="{child.page}">
+           <f:form.hidden property="page" value="{child.page}" id="fname"/>
+        </f:if>
+    </f:form>
     <f:if condition="{settings.basketButton} && {settings.targetBasket}">
         <span class="tx-dlf-basket-button">
                 <f:link.action
@@ -72,6 +64,5 @@
             <f:render partial="TableOfContents/Children" arguments="{children: child._SUB_MENU, viewData: viewData}"/>
         </ul>
     </f:if>
-
     </li>
 </f:for>

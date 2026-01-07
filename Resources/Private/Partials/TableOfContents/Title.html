@@ -12,7 +12,7 @@
 <html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"
       data-namespace-typo3-fluid="true">
 
-<span class="tx-dlf-toc-title">
+<span onclick="this.closest('form').submit();">
     <f:if condition="{child.title}">
         <f:then>
             <f:format.crop maxCharacters="55" append="&nbsp;..."><f:format.htmlspecialchars doubleEncode="false">{child.title}</f:format.htmlspecialchars></f:format.crop>
