@@ -14,7 +14,46 @@
 
 <div class="tx-dlf-tableofcontents">
     <ul>
+    <f:form id="clickForm" method="post" action="tocClick" controller="TableOfContents" name="tocClickForm" object="{tocClickForm}" addQueryString="untrusted">
+        <f:if condition="{viewData.requestData.id}">
+            <f:form.hidden property="id" value="{viewData.requestData.id}"/>
+        </f:if>
+        <f:if condition="{viewData.requestData.double}">
+            <f:form.hidden property="double" value="{viewData.requestData.double}"/>
+        </f:if>
         <f:render partial="TableOfContents/Children" arguments="{children: toc, viewData: viewData}"/>
+    </f:form>
     </ul>
 </div>
 </html>
+<script>
+    document.addEventListener('click', function (evt) {
+        const tocItem = evt.target.closest('.toc-entry');
+        if (!tocItem) return;
+    
+        evt.preventDefault();
+    
+        const form = document.getElementById('clickForm');
+        if (!form) {
+            console.error('clickForm not found');
+            return;
+        }
+    
+        const page = tocItem.dataset.page;
+        if (!page) {
+            console.warn('toc-entry has no data-page');
+            return;
+        }
+    
+        // Remove previous dynamic input if it exists
+        let pageInput = form.querySelector('input[name="page"]');
+        if (!pageInput) {
+            pageInput = document.createElement('input');
+            pageInput.type = 'hidden';
+            pageInput.property = 'page';
+            form.appendChild(pageInput);
+        }
+        pageInput.value = page;
+        form.submit();
+    });
+    </script>

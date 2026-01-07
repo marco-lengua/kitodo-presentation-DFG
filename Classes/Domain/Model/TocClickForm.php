@@ -28,9 +28,12 @@ class TocClickForm extends AbstractEntity
      * @access protected
      * @var integer
      */
-    
     protected $id;
-
+    /**
+     * 
+     * @access protected
+     * @var string
+     */
     protected $double;
 
     /**

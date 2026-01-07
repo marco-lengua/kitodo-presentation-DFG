@@ -33,32 +33,10 @@
         <f:defaultCase>
             <li class="tx-dlf-toc-no">
         </f:defaultCase>
-    </f:switch>
-    <f:form method="post" action="tocClick" controller="TableOfContents" name="tocClickForm" object="{tocClickForm}" addQueryString="untrusted">
-        <f:if condition="{viewData.requestData.id}">
-            <f:form.hidden property="id" value="{viewData.requestData.id}"/>
-        </f:if>
-        <f:if condition="{viewData.requestData.double}">
-           <f:form.hidden property="double" value="{viewData.requestData.double}"/>
-        </f:if>
-        <label for="fname"><f:render partial="TableOfContents/Title" arguments="{child: child}"/></label>
-        <f:if condition="{child.page}">
-           <f:form.hidden property="page" value="{child.page}" id="fname"/>
-        </f:if>
-    </f:form>
-    <f:if condition="{settings.basketButton} && {settings.targetBasket}">
-        <span class="tx-dlf-basket-button">
-                <f:link.action
-                    pageUid="{settings.targetBasket}"
-                    action="main"
-                    controller="Basket"
-                    additionalParams="{'tx_dlf[addToBasket]':'toc', 'tx_dlf[logId]':child.basketButton.logId, 'tx_dlf[startpage]':child.basketButton.startpage, 'tx_dlf_basket[action]':'add', 'tx_dlf_basket[controller]':'Basket'}"
-                    addQueryString="untrusted">
-                        <f:translate key="basket.addBasket" />
-                </f:link.action>
-        </span>
-    </f:if>
-
+    </f:switch>   
+    <div class="toc-entry" data-page="{child.page}">
+        <f:render partial="TableOfContents/Title" arguments="{child: child}"/>
+    </div>
     <f:if condition="{child._SUB_MENU} && ({child.ITEM_STATE} == 'IFSUB' || {child.ITEM_STATE} == 'ACTIFSUB' || {child.ITEM_STATE} == 'CURIFSUB')">
         <ul>
             <f:render partial="TableOfContents/Children" arguments="{children: child._SUB_MENU, viewData: viewData}"/>
@@ -66,3 +44,4 @@
     </f:if>
     </li>
 </f:for>
+
