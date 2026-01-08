@@ -12,7 +12,6 @@
 <html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"
       xmlns:kitodo="http://typo3.org/ns/Kitodo/Dlf/ViewHelpers"
       data-namespace-typo3-fluid="true">
-
 <f:for each="{children}" as="child">
     <f:switch expression="{child.ITEM_STATE}">
         <f:case value="ACT">
@@ -44,4 +43,3 @@
     </f:if>
     </li>
 </f:for>
-

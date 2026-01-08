@@ -35,27 +35,23 @@ class TableOfContentsController extends AbstractController
      */
     protected array $activeEntries = [];
 
-    public function tocClickAction(): ResponseInterface
-{
-    $queryParams = $this->request->getQueryParams();
+    public function tocClickAction(?TocClickForm $tocClickForm = null): ResponseInterface
+    {
+        if($tocClickForm){
+            $uri = $this->uriBuilder->reset()
+            ->setArguments([
+                'tx_dlf' => [
+                    'id' => $tocClickForm->getId(),
+                    'page' => $tocClickForm->getPage(),
+                    'double' => $tocClickForm->getDouble() ?? 0
+                ]
+            ])
+            ->uriFor('main');
 
-    $txDlf = $queryParams['tx_dlf'] ?? [];
-
-    $id = (int)($txDlf['id']);
-    $page = (int)($txDlf['page']);
-    $double = (int)($txDlf['double']);
-    $uri = $this->uriBuilder->reset()
-        ->setArguments([
-            'tx_dlf' => [
-                'id' => $id,
-                'page' => $page,
-                'double' => $double
-            ]
-        ])
-        ->uriFor('main');
-
-    return $this->redirectToUri($uri);
-}
+            return $this->redirectToUri($uri);
+        }
+        return $this->htmlResponse();
+    }
 
     /**
      * The main method of the plugin
