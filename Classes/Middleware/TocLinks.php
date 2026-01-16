@@ -55,6 +55,7 @@ class TocLinks implements MiddlewareInterface
                 $page   = $formData['page'];
                 $double = $formData['double'] ?? '0';
                 $pageUrl = $request->getUri()->getPath();
+                $query = http_build_query([
                     'tx_dlf' => [
                     'id'     => $id,
                     'page'   => $page,
