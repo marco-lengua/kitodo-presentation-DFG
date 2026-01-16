@@ -14,7 +14,7 @@
     <div class="tx-dlf-pagegrid">
         <form id="pagegridForm" method="post" action="{f:uri.page()}" name="pagegridForm" object="{pagegridForm}" addQueryString="untrusted">
             <input type="hidden" name="tocClickForm[id]" id="formUidInput" value="{docUid}">
-            <input type="hidden" name="tocClickForm[page]" id="formGridPageInput" value="{paginator.paginatedItems[0].page}">  
+            <input type="hidden" name="tocClickForm[page]" id="formGridPageInput" value="1">  
         <ol class="tx-dlf-pagegrid-list">
             <f:for each="{paginator.paginatedItems}" as="entry" iteration="iterator">
                 <li class="tx-dlf-pagegrid-{entry.state}" value="{entry.page}">
