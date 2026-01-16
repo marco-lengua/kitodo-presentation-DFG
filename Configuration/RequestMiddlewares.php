@@ -35,6 +35,12 @@ return [
             'after' => [
                 'typo3/cms-frontend/prepare-tsfe-rendering'
             ]
+        ],
+        'dlf/toclinks' => [
+            'target' => \Kitodo\Dlf\Middleware\TocLinks::class,
+            'after' => [
+                'typo3/cms-frontend/prepare-tsfe-rendering'
+            ]
         ]
     ],
 ];

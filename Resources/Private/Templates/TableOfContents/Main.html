@@ -14,14 +14,10 @@
 
 <div class="tx-dlf-tableofcontents">
     <ul>
-    <f:form id="clickForm" method="post" action="tocClick" controller="TableOfContents" name="tocClickForm" object="{tocClickForm}" addQueryString="untrusted">
-        <f:if condition="{viewData.requestData.id}">
-            <f:form.hidden property="id" value="{viewData.requestData.id}"/>
-        </f:if>
-        <f:if condition="{viewData.requestData.double}">
-            <f:form.hidden property="double" value="{viewData.requestData.double}"/>
-        </f:if>
-        <f:form.hidden id="formPageInput" property="page" value="{viewData.requestData.page}"/>
+        <form id="clickForm" method="post" action="{f:uri.page()}" name="tocClickForm" object="{tocClickForm}" addQueryString="untrusted">
+            <input type="hidden" name="tocClickForm[id]" value="{viewData.requestData.id}">
+            <input type="hidden" name="tocClickForm[double]" value="{viewData.requestData.double}">
+            <input type="hidden" name="tocClickForm[page]" id="formPageInput" value="{viewData.requestData.page}">  
         <f:render partial="TableOfContents/Children" arguments="{children: toc, viewData: viewData}"/>
         <script>
             document.addEventListener('click', function (evt) {
@@ -32,7 +28,7 @@
                 document.getElementById('clickForm').submit();
             });
             </script>
-    </f:form>
+    </form>
     </ul>
 </div>
 </html>

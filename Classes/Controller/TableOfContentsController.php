@@ -13,7 +13,6 @@ namespace Kitodo\Dlf\Controller;
 
 use Kitodo\Dlf\Common\Helper;
 use Kitodo\Dlf\Common\MetsDocument;
-use Kitodo\Dlf\Domain\Model\TocClickForm;
 use Psr\Http\Message\ResponseInterface;
 use TYPO3\CMS\Core\Utility\MathUtility;
 
@@ -34,24 +33,6 @@ class TableOfContentsController extends AbstractController
      * @var array This holds the active entries according to the currently selected page
      */
     protected array $activeEntries = [];
-
-    public function tocClickAction(?TocClickForm $tocClickForm = null): ResponseInterface
-    {
-        if($tocClickForm){
-            $uri = $this->uriBuilder->reset()
-            ->setArguments([
-                'tx_dlf' => [
-                    'id' => $tocClickForm->getId(),
-                    'page' => $tocClickForm->getPage(),
-                    'double' => $tocClickForm->getDouble() ?? 0
-                ]
-            ])
-            ->uriFor('main');
-
-            return $this->redirectToUri($uri);
-        }
-        return $this->htmlResponse();
-    }
 
     /**
      * The main method of the plugin

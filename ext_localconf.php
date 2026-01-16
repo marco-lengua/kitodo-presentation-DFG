@@ -178,11 +178,11 @@ $GLOBALS['TYPO3_CONF_VARS']['SYS']['formEngine']['nodeRegistry'][] = [
     'Dlf',
     'TableOfContents',
     [
-        \Kitodo\Dlf\Controller\TableOfContentsController::class => 'main, tocClick',
+        \Kitodo\Dlf\Controller\TableOfContentsController::class => 'main',
     ],
     // non-cacheable actions
     [
-        \Kitodo\Dlf\Controller\TableOfContentsController::class => 'tocClick',
+        \Kitodo\Dlf\Controller\TableOfContentsController::class => '',
     ]
 );
 
