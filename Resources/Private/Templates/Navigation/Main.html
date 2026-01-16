@@ -119,28 +119,26 @@
 
 <f:section name="render.pageSelect">
     <li class="pages">
-        <f:form method="post" action="pageSelect" controller="Navigation" name="pageSelectForm" object="{pageSelectForm}" addQueryString="untrusted">
-            <f:if condition="{viewData.requestData.id}">
-                <f:form.hidden property="id" value="{viewData.requestData.id}"/>
-            </f:if>
-            <f:if condition="{viewData.requestData.recordId}">
-                <f:form.hidden property="recordId" value="{viewData.requestData.recordId}"/>
-            </f:if>
-            <f:if condition="{viewData.requestData.double}">
-                <f:form.hidden property="double" value="{viewData.requestData.double}"/>
-            </f:if>
+        <form id="pageSelectForm" method="post" action="{f:uri.page()}">
+            <input type="hidden" name="pageSelectForm[id]" value="{viewData.requestData.id}">
+            <input type="hidden" name="pageSelectForm[recordId]" value="{viewData.requestData.recordId}">
+            <input type="hidden" name="pageSelectForm[double]" value="{viewData.requestData.double}">
             <f:if condition="{viewData.requestData.multiviewembedded} == 1">
-                <f:form.hidden name="tx_dlf[multiviewembedded]" value="{viewData.requestData.multiviewembedded}"/>
+                <input type="hidden" name="tx_dlf[multiviewembedded]" value="{viewData.requestData.multiviewembedded}">
             </f:if>
+        
             <label for="tx-dlf-page-{viewData.uniqueId}">
                 <f:translate key="selectPage"/>
             </label>
-            <f:form.select id="tx-dlf-page-{viewData.uniqueId}" property="page"
-                options="{pageOptions}"
-                value="{viewData.requestData.page}"
-                additionalAttributes="{'onchange': 'javascript:this.form.submit();'}">
-            </f:form.select>
-        </f:form>
+            <select id="tx-dlf-page-{viewData.uniqueId}" name="pageSelectForm[page]"
+                    onchange="this.form.submit();">
+                <f:for each="{pageOptions}" as="label" key="value">
+                    <option value="{value}" {f:if(condition: value == viewData.requestData.page, then: 'selected')}>
+                        {label}
+                    </option>
+                </f:for>
+            </select>
+        </form>
     </li>
 </f:section>
 

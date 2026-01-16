@@ -12,15 +12,12 @@
 
 namespace Kitodo\Dlf\Middleware;
 
-use Kitodo\Dlf\Domain\Model\TocClickForm;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use TYPO3\CMS\Core\Http\RedirectResponse;
 use TYPO3\CMS\Core\Http\Response;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder;
 
 /**
  * Search in document Middleware for plugin 'Search' of the 'dlf' extension
@@ -30,7 +27,7 @@ use TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder;
  *
  * @access public
  */
-class TocLinks implements MiddlewareInterface
+class NavigationMiddleware implements MiddlewareInterface
 {
     /**
      * The process method of the middleware.
@@ -47,6 +44,7 @@ class TocLinks implements MiddlewareInterface
         if ($request->getMethod() === 'POST') {
             $body = $request->getParsedBody();
         
+            //for TableOfContents Click
             if (isset($body['tocClickForm']))
             {
                 $formData = $body['tocClickForm'] ?? null;
@@ -65,7 +63,43 @@ class TocLinks implements MiddlewareInterface
                 $uri = $pageUrl . '?' . $query;
                 return new RedirectResponse($uri, 303);
             }
-            return new Response('Middleware reached no tocClickform', 200);
+            elseif(isset($body['pageSelectForm']))
+            {
+                $formData = $body['pageSelectForm'] ?? null;
+
+                $id     = $formData['id'];
+                $page   = $formData['page'];
+                $double = $formData['double'] ?? '0';
+                $pageUrl = $request->getUri()->getPath();
+                $query = http_build_query([
+                    'tx_dlf' => [
+                    'id'     => $id,
+                    'page'   => $page,
+                    'double' => $double,
+                ]
+                ]);
+                $uri = $pageUrl . '?' . $query;
+                return new RedirectResponse($uri, 303);
+            }
+            elseif(isset($body['pageGridForm']))
+            {
+                $formData = $body['pageGridForm'] ?? null;
+
+                $id     = $formData['id'];
+                $page   = $formData['page'];
+                $double = $formData['double'] ?? '0';
+                $pageUrl = $request->getUri()->getPath();
+                $query = http_build_query([
+                    'tx_dlf' => [
+                    'id'     => $id,
+                    'page'   => $page,
+                    'double' => $double,
+                ]
+                ]);
+                $uri = $pageUrl . '?' . $query;
+                return new RedirectResponse($uri, 303);
+            }
+            return new Response('Middleware reached no target known', 200);
         }
         return $handler->handle($request);;
     }

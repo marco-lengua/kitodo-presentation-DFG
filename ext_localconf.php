@@ -202,11 +202,11 @@ $GLOBALS['TYPO3_CONF_VARS']['SYS']['formEngine']['nodeRegistry'][] = [
     'Dlf',
     'Navigation',
     [
-        \Kitodo\Dlf\Controller\NavigationController::class => 'main, pageSelect',
+        \Kitodo\Dlf\Controller\NavigationController::class => 'main',
     ],
     // non-cacheable actions
     [
-        \Kitodo\Dlf\Controller\NavigationController::class => 'pageSelect',
+        \Kitodo\Dlf\Controller\NavigationController::class => '',
     ]
 );
 

@@ -22,12 +22,23 @@
         <script>
             document.addEventListener('click', function (evt) {
                 const tocItem = evt.target.closest('.toc-entry');
-                if (!tocItem) return;  
-                evt.preventDefault();
-                document.getElementById('formPageInput').value= tocItem.dataset.page;;
-                document.getElementById('clickForm').submit();
+                const pagegridItem = evt.target.closest('.pagegrid-entry');
+                if (tocItem){
+                    evt.preventDefault();
+                    document.getElementById('formPageInput').value= tocItem.dataset.page;;
+                    document.getElementById('clickForm').submit();
+                }
+                else if (pagegridItem){
+                    evt.preventDefault();
+                    document.getElementById('formUidInput').value= pagegridItem.dataset.id;
+                    document.getElementById('formGridPageInput').value= pagegridItem.dataset.page;;
+                    document.getElementById('pagegridForm').submit();
+                }
+                else {
+                    return;
+                }              
             });
-            </script>
+        </script>
     </form>
     </ul>
 </div>

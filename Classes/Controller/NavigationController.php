@@ -12,9 +12,7 @@
 namespace Kitodo\Dlf\Controller;
 
 use Kitodo\Dlf\Common\MetsDocument;
-use Kitodo\Dlf\Domain\Model\PageSelectForm;
 use Psr\Http\Message\ResponseInterface;
-use TYPO3\CMS\Core\Utility\MathUtility;
 
 /**
  * Controller class for the plugin 'Navigation'.
@@ -26,35 +24,6 @@ use TYPO3\CMS\Core\Utility\MathUtility;
  */
 class NavigationController extends AbstractController
 {
-    /**
-     * Method to get the page select values and use them with cHash
-     *
-     * @access public
-     *
-     * @param PageSelectForm|NULL $pageSelectForm
-     *
-     * @return ResponseInterface the response
-     */
-    public function pageSelectAction(?PageSelectForm $pageSelectForm = null): ResponseInterface
-    {
-        if ($pageSelectForm) {
-            $uri = $this->uriBuilder->reset()
-                ->setArguments(
-                    [
-                        'tx_dlf' => [
-                            'id' => $pageSelectForm->getId(),
-                            'page' => $pageSelectForm->getPage(),
-                            'double' => $pageSelectForm->getDouble()
-                        ]
-                    ]
-                )
-                ->uriFor('main');
-            return $this->redirectToUri($uri);
-        }
-
-        return $this->htmlResponse();
-    }
-
     /**
      * The main method of the plugin
      *

@@ -12,11 +12,14 @@
 <html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"
       data-namespace-typo3-fluid="true">
     <div class="tx-dlf-pagegrid">
+        <form id="pagegridForm" method="post" action="{f:uri.page()}" name="pagegridForm" object="{pagegridForm}" addQueryString="untrusted">
+            <input type="hidden" name="tocClickForm[id]" id="formUidInput" value="{docUid}">
+            <input type="hidden" name="tocClickForm[page]" id="formGridPageInput" value="{paginator.paginatedItems[0].page}">  
         <ol class="tx-dlf-pagegrid-list">
             <f:for each="{paginator.paginatedItems}" as="entry" iteration="iterator">
                 <li class="tx-dlf-pagegrid-{entry.state}" value="{entry.page}">
                     <div class="tx-dlf-pagegrid-thumbnail">
-                        <f:link.page pageUid="{settings.targetPid}" additionalParams="{'tx_dlf[id]': docUid, 'tx_dlf[page]': entry.page}">
+                        <div class="pagegrid-entry" data-id="{docUid}" data-page="{entry.page}">
                             <f:if condition="{entry.thumbnail}">
                                 <f:then>
                                     <img src="{entry.thumbnail}" alt="{f:translate(key: 'thumbnail')} {f:translate(key: 'page')} {entry.pagination}" title="{f:translate(key: 'page')} {entry.pagination}" />
@@ -33,7 +36,7 @@
                                 </f:else>
                             </f:if>
                             <div class="tx-dlf-pagegrid-pagination">{entry.pagination}</div>
-                        </f:link.page>
+                        </div>
                     </div>
                 </li>
             </f:for>

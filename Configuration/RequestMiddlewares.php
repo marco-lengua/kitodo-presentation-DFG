@@ -36,8 +36,8 @@ return [
                 'typo3/cms-frontend/prepare-tsfe-rendering'
             ]
         ],
-        'dlf/toclinks' => [
-            'target' => \Kitodo\Dlf\Middleware\TocLinks::class,
+        'dlf/navigationMiddleware' => [
+            'target' => \Kitodo\Dlf\Middleware\NavigationMiddleware::class,
             'after' => [
                 'typo3/cms-frontend/prepare-tsfe-rendering'
             ]
