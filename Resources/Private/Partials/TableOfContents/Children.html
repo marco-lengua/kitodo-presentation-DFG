@@ -34,7 +34,9 @@
         </f:defaultCase>
     </f:switch>   
     <div class="toc-entry" data-page="{child.page}">
-        <f:render partial="TableOfContents/Title" arguments="{child: child}"/>
+        <a href="">
+            <f:render partial="TableOfContents/Title" arguments="{child: child}"/>
+        </a>
     </div>
     <f:if condition="{child._SUB_MENU} && ({child.ITEM_STATE} == 'IFSUB' || {child.ITEM_STATE} == 'ACTIFSUB' || {child.ITEM_STATE} == 'CURIFSUB')">
         <ul>
