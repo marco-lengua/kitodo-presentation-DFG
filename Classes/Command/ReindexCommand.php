@@ -121,8 +121,7 @@ class ReindexCommand extends BaseCommand
         $this->initializeRepositories((int) $input->getOption('pid'));
 
         if ($this->storagePid == 0) {
-            $io->error('ERROR: No valid PID (' . $this->storagePid . ') given.');
-            return Command::FAILURE;
+            return $this->handlePidError($io);
         }
 
         if (
@@ -134,32 +133,13 @@ class ReindexCommand extends BaseCommand
 
             // Abort if solrCoreUid is empty or not in the array of allowed solr cores.
             if (empty($solrCoreUid) || !in_array($solrCoreUid, $allSolrCores)) {
-                $outputSolrCores = [];
-                foreach ($allSolrCores as $indexName => $uid) {
-                    $outputSolrCores[] = $uid . ' : ' . $indexName;
-                }
-                if (empty($outputSolrCores)) {
-                    $io->error('ERROR: No valid Solr core ("' . $input->getOption('solr') . '") given. No valid cores found on PID ' . $this->storagePid . ".\n");
-                    return Command::FAILURE;
-                } else {
-                    $io->error('ERROR: No valid Solr core ("' . $input->getOption('solr') . '") given. ' . "Valid cores are (<uid>:<index_name>):\n" . implode("\n", $outputSolrCores) . "\n");
-                    return Command::FAILURE;
-                }
+                return $this->handleSolrError($allSolrCores, $input->getOption('solr'), $io);
             }
         } else {
-            $io->error('ERROR: Required parameter --solr|-s is missing or array.');
-            return Command::FAILURE;
+            return $this->handleSolrMissingError($io);
         }
 
-        if (!empty($input->getOption('owner'))) {
-            if (MathUtility::canBeInterpretedAsInteger($input->getOption('owner'))) {
-                $this->owner = $this->libraryRepository->findByUid(MathUtility::forceIntegerInRange((int) $input->getOption('owner'), 1));
-            } else {
-                $this->owner = $this->libraryRepository->findOneBy(['indexName' => (string) $input->getOption('owner')]);
-            }
-        } else {
-            $this->owner = null;
-        }
+        $this->setOwner($input->getOption('owner'));
 
         if (!empty($input->getOption('all'))) {
             if (
@@ -167,7 +147,7 @@ class ReindexCommand extends BaseCommand
                 && $input->getOption('index-begin') >= 0
             ) {
                 // Get all documents for given limit and start.
-                $documents = $this->documentRepository->findAll()
+                $documents = $this->documentRepository->findAll() // @phpstan-ignore-line
                     ->getQuery()
                     ->setLimit((int) $input->getOption('index-limit'))
                     ->setOffset((int) $input->getOption('index-begin'))
@@ -184,7 +164,7 @@ class ReindexCommand extends BaseCommand
             $collections = GeneralUtility::intExplode(',', $input->getOption('coll'), true);
             // "coll" may be a single integer or a comma-separated list of integers.
             if (empty(array_filter($collections))) {
-                $io->error('ERROR: Parameter --coll|-c is not a valid comma-separated list of collection UIDs.');
+                $io->error('Parameter --coll|-c is not a valid comma-separated list of collection UIDs.');
                 return Command::FAILURE;
             }
 
@@ -200,7 +180,7 @@ class ReindexCommand extends BaseCommand
                 $documents = $this->documentRepository->findAllByCollectionsLimited($collections, 0);
             }
         } else {
-            $io->error('ERROR: One of parameters --all|-a or --coll|-c must be given.');
+            $io->error('One of parameters --all|-a or --coll|-c must be given.');
             return Command::FAILURE;
         }
 
@@ -213,10 +193,10 @@ class ReindexCommand extends BaseCommand
             }
 
             if ($dryRun) {
-                $io->writeln('DRY RUN: Would index ' . ($id + 1) . '/' . count($documents) . '  with UID "' . $document->getUid() . '" ("' . $document->getLocation() . '") on PID ' . $this->storagePid . ' and Solr core ' . $solrCoreUid . '.');
+                $io->writeln('DRY RUN: Would index ' . ($id + 1) . '/' . iterator_count($documents) . '  with UID "' . $document->getUid() . '" ("' . $document->getLocation() . '") on PID ' . $this->storagePid . ' and Solr core ' . $solrCoreUid . '.');
             } else {
                 if ($io->isVerbose()) {
-                    $io->writeln(date('Y-m-d H:i:s') . ' Indexing ' . ($id + 1) . '/' . count($documents) . ' with UID "' . $document->getUid() . '" ("' . $document->getLocation() . '") on PID ' . $this->storagePid . ' and Solr core ' . $solrCoreUid . '.');
+                    $io->writeln(date('Y-m-d H:i:s') . ' Indexing ' . ($id + 1) . '/' . iterator_count($documents) . ' with UID "' . $document->getUid() . '" ("' . $document->getLocation() . '") on PID ' . $this->storagePid . ' and Solr core ' . $solrCoreUid . '.');
                 }
                 $document->setCurrentDocument($doc);
                 // save to database

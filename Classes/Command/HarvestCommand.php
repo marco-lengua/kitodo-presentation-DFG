@@ -54,10 +54,10 @@ class HarvestCommand extends BaseCommand
                 'If this option is set, the files will not actually be processed but the location URIs are shown.'
             )
             ->addOption(
-                'lib',
-                'l',
+                'owner',
+                'o',
                 InputOption::VALUE_REQUIRED,
-                'UID of the library to harvest.'
+                '[UID|index_name] of the library to harvest.'
             )
             ->addOption(
                 'pid',
@@ -117,8 +117,7 @@ class HarvestCommand extends BaseCommand
         $this->initializeRepositories((int) $input->getOption('pid'));
 
         if ($this->storagePid == 0) {
-            $io->error('ERROR: No valid PID (' . $this->storagePid . ') given.');
-            return Command::FAILURE;
+            return $this->handlePidError($io);
         }
 
         if (
@@ -133,35 +132,22 @@ class HarvestCommand extends BaseCommand
             }
             // Abort if solrCoreUid is empty or not in the array of allowed solr cores.
             if (empty($solrCoreUid) || !in_array($solrCoreUid, $allSolrCores)) {
-                $outputSolrCores = [];
-                foreach ($allSolrCores as $indexName => $uid) {
-                    $outputSolrCores[] = $uid . ' : ' . $indexName;
-                }
-                if (empty($outputSolrCores)) {
-                    $io->error('ERROR: No valid Solr core ("' . $input->getOption('solr') . '") given. No valid cores found on PID ' . $this->storagePid . ".\n");
-                    return Command::FAILURE;
-                } else {
-                    $io->error('ERROR: No valid Solr core ("' . $input->getOption('solr') . '") given. ' . "Valid cores are (<uid>:<index_name>):\n" . implode("\n", $outputSolrCores) . "\n");
-                    return Command::FAILURE;
-                }
+                return $this->handleSolrError($allSolrCores, $input->getOption('solr'), $io);
             }
         } else {
-            $io->error('ERROR: Required parameter --solr|-s is missing or array.');
-            return Command::FAILURE;
+            return $this->handleSolrMissingError($io);
         }
 
-        if (MathUtility::canBeInterpretedAsInteger($input->getOption('lib'))) {
-            $this->owner = $this->libraryRepository->findByUid(MathUtility::forceIntegerInRange((int) $input->getOption('lib'), 1));
-        }
+        $this->setOwner($input->getOption('owner'));
 
         if ($this->owner) {
             $baseUrl = $this->owner->getOaiBase();
         } else {
-            $io->error('ERROR: Required parameter --lib|-l is not a valid UID.');
+            $io->error('Required parameter --lib|-l is not a valid UID.');
             return Command::FAILURE;
         }
         if (!GeneralUtility::isValidUrl($baseUrl)) {
-            $io->error('ERROR: No valid OAI Base URL set for library with given UID ("' . $input->getOption('lib') . '").');
+            $io->error('No valid OAI Base URL set for library with given UID ("' . $input->getOption('owner') . '").');
             return Command::FAILURE;
         } else {
             try {
@@ -171,23 +157,8 @@ class HarvestCommand extends BaseCommand
             }
         }
 
-        if (
-            !is_array($input->getOption('from'))
-            && preg_match('/^\d{4}-\d{2}-\d{2}$/', $input->getOption('from'))
-        ) {
-            $from = new \DateTime($input->getOption('from'));
-        } else {
-            $from = null;
-        }
-
-        if (
-            !is_array($input->getOption('until'))
-            && preg_match('/^\d{4}-\d{2}-\d{2}$/', $input->getOption('until'))
-        ) {
-            $until = new \DateTime($input->getOption('until'));
-        } else {
-            $until = null;
-        }
+        $from = $this->getDate($input, 'from');
+        $until = $this->getDate($input, 'until');
 
         $set = null;
         if (
@@ -203,7 +174,7 @@ class HarvestCommand extends BaseCommand
                 }
             }
             if (empty($set)) {
-                $io->error('ERROR: OAI interface does not provide a set with given setSpec ("' . $input->getOption('set') . '").');
+                $io->error('OAI interface does not provide a set with given setSpec ("' . $input->getOption('set') . '").');
                 return Command::FAILURE;
             }
         }
@@ -214,7 +185,7 @@ class HarvestCommand extends BaseCommand
             if (!empty($oai)) {
                 $identifiers = $oai->listIdentifiers('mets', $from, $until, $set);
             } else {
-                $io->error('ERROR: OAI interface does not exist.');
+                $io->error('OAI interface does not exist.');
             }
         } catch (BaseoaipmhException $exception) {
             $this->handleOaiError($exception, $io);
@@ -271,17 +242,39 @@ class HarvestCommand extends BaseCommand
     }
 
     /**
+     * Get date from input option.
+     *
+     * @access private
+     *
+     * @param InputInterface $input The input parameters
+     * @param string $dateType The type of date to get (from|until)
+     *
+     * @return \DateTime|null
+     */
+    private function getDate(InputInterface $input, string $dateType): \DateTime|null
+    {
+        if (
+            !is_array($input->getOption($dateType))
+            && preg_match('/^\d{4}-\d{2}-\d{2}$/', $input->getOption($dateType))
+        ) {
+            return new \DateTime($input->getOption($dateType));
+        }
+
+        return null;
+    }
+
+    /**
      * Handles OAI errors
      *
-     * @access protected
+     * @access private
      *
      * @param BaseoaipmhException $exception Instance of exception thrown
      * @param SymfonyStyle $io
      *
      * @return void
      */
-    protected function handleOaiError(BaseoaipmhException $exception, SymfonyStyle $io): void
+    private function handleOaiError(BaseoaipmhException $exception, SymfonyStyle $io): void
     {
-        $io->error('ERROR: Trying to retrieve data from OAI interface resulted in error:' . "\n    " . $exception->getMessage());
+        $io->error('Trying to retrieve data from OAI interface resulted in error:' . "\n    " . $exception->getMessage());
     }
 }

@@ -80,25 +80,25 @@ abstract class AbstractController extends ActionController implements LoggerAwar
 
     /**
      * @access protected
-     * @var array
+     * @var mixed[]
      */
-    protected $multiViewDocuments = [];
+    protected array $multiViewDocuments = [];
 
     /**
      * @access protected
-     * @var array
+     * @var mixed[]
      */
     protected array $extConf;
 
     /**
      * @access protected
-     * @var array This holds the request parameter
+     * @var mixed[] This holds the request parameter
      */
     protected array $requestData;
 
     /**
      * @access protected
-     * @var array This holds some common data for the fluid view
+     * @var mixed[] This holds some common data for the fluid view
      */
     protected array $viewData;
 
@@ -112,7 +112,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
      * Holds the configured useGroups as array.
      *
      * @access protected
-     * @var \Kitodo\Dlf\Configuration\UseGroupsConfiguration
+     * @var UseGroupsConfiguration
      */
     protected UseGroupsConfiguration $useGroupsConfiguration;
 
@@ -150,8 +150,6 @@ abstract class AbstractController extends ActionController implements LoggerAwar
             'requestData' => $this->requestData
         ];
 
-
-
         try {
             $this->viewData['publicResourcePath'] = PathUtility::getPublicResourceWebPath('EXT:dlf/Resources/Public');
         } catch (InvalidFileException) {
@@ -163,7 +161,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
     /**
      * Get the multiview plugin configuration.
      *
-     * @return array|null The configuration
+     * @return mixed[]|null The configuration
      */
     public function getMultiViewPluginConfig(): ?array
     {
@@ -186,7 +184,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
         $index = count($this->multiViewDocuments);
         $this->multiViewDocuments[$index]['url'] = $url;
         $this->multiViewDocuments[$index]['encodedUrl'] = urlencode($this->multiViewDocuments[$index]['url']);
-        if (strpos($url, '#') !== false) {
+        if (str_contains($url, '#')) {
             $page = (int) explode('#', $url)[1];
         }
         $this->multiViewDocuments[$index]['page'] = $page;
@@ -235,7 +233,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
         }
         if (isset($this->requestData['multiViewSource']) && is_array($this->requestData['multiViewSource'])) {
             foreach ($this->requestData['multiViewSource'] as $sourceKey => $documentUrl) {
-                $sourceDocument = AbstractDocument::getInstance($documentUrl, $this->settings);
+                $sourceDocument = Helper::getDocumentInstance($documentUrl, $this->settings);
                 if ($sourceDocument !== null) {
                     if ($this->isMultiDocumentType($sourceDocument->tableOfContents[0]['type'])) {
                         $childDocuments = $sourceDocument->tableOfContents[0]['children'];
@@ -260,7 +258,43 @@ abstract class AbstractController extends ActionController implements LoggerAwar
     protected function loadDocument(string $documentId = ''): void
     {
         $this->sanitizeSettings();
-        $this->document = $this->documentService->getDocument($documentId, $this->requestData['id'], $this->settings);
+
+        // Get document ID from request data if not passed as parameter.
+        if (!$documentId && !empty($this->requestData['id'])) {
+            $documentId = $this->requestData['id'];
+        }
+
+        // Try to get document format from database
+        if (!empty($documentId)) {
+
+
+            $doc = null;
+
+            if (MathUtility::canBeInterpretedAsInteger($documentId)) {
+                $doc = $this->getDocumentByUid((int) $documentId);
+            } elseif (GeneralUtility::isValidUrl($documentId)) {
+                $doc = $this->getDocumentByUrl($documentId);
+            }
+
+            if ($this->document !== null && $doc !== null) {
+                $this->document->setCurrentDocument($doc);
+            }
+
+        } elseif (!empty($this->requestData['recordId'])) {
+
+            $this->document = $this->documentRepository->findOneBy(['recordId' => $this->requestData['recordId']]);
+
+            if ($this->document !== null) {
+                $doc = Helper::getDocumentInstance($this->document->getLocation(), $this->settings);
+                if ($doc !== null) {
+                    $this->document->setCurrentDocument($doc);
+                } else {
+                    $this->logger->error('Failed to load document with record ID "' . $this->requestData['recordId'] . '"');
+                }
+            }
+        } else {
+            $this->logger->error('Invalid ID "' . $documentId . '" or PID "' . $this->settings['storagePid'] . '" for document loading');
+        }
     }
 
     /**
@@ -336,16 +370,54 @@ abstract class AbstractController extends ActionController implements LoggerAwar
     }
 
     /**
+     * Safely gets integer parameters from request if they exist, otherwise returns 0.
+     *
+     * @access protected
+     *
+     * @param string $parameterName
+     * @param string[] $pluginNames
+     *
+     * @return mixed[]
+     */
+    protected function getArrayParameterSafely(string $parameterName, array $pluginNames = []): array
+    {
+        $parameter = $this->getParametersSafely($parameterName, $pluginNames);
+        if (empty($parameter) || is_string($parameter)) {
+            return [];
+        }
+        return $parameter;
+    }
+
+    /**
+     * Safely gets integer parameters from request if they exist, otherwise returns 0.
+     *
+     * @access protected
+     *
+     * @param string $parameterName
+     * @param string[] $pluginNames
+     *
+     * @return int
+     */
+    protected function getIntParameterSafely(string $parameterName, array $pluginNames = []): int
+    {
+        $parameter = $this->getParametersSafely($parameterName, $pluginNames);
+        if (empty($parameter) || is_array($parameter)) {
+            return 0;
+        }
+        return (int) $parameter;
+    }
+
+    /**
      * Safely gets parameters from request if they exist
      *
      * @access protected
      *
      * @param string $parameterName
-     * @param array $pluginNames
+     * @param string[] $pluginNames
      *
-     * @return null|string|array
+     * @return null|string|mixed[]
      */
-    protected function getParametersSafely(string $parameterName, array $pluginNames = [])
+    protected function getParametersSafely(string $parameterName, array $pluginNames = []): array|string|null
     {
         if ($this->request->hasArgument($parameterName)) {
             return $this->request->getArgument($parameterName);
@@ -360,7 +432,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
 
         $parsedBody = $this->request->getParsedBody();
         if ($parsedBody) {
-            $bodyParameter = $this->getParameterFromRequestData($parameterName, $parsedBody, $pluginNames);
+            $bodyParameter = $this->getParameterFromRequestData($parameterName, (array) $parsedBody, $pluginNames);
             if ($bodyParameter !== null) {
                 return $bodyParameter;
             }
@@ -381,11 +453,11 @@ abstract class AbstractController extends ActionController implements LoggerAwar
      * Safely gets plugin parameters from argument if they exist
      *
      * @param string $parameterName
-     * @param array $pluginNames
+     * @param string[] $pluginNames
      *
-     * @return null|string|array
+     * @return null|string|mixed[]
      */
-    private function getPluginParameterFromArgument(string $parameterName, array $pluginNames)
+    private function getPluginParameterFromArgument(string $parameterName, array $pluginNames): array|string|null
     {
         foreach ($pluginNames as $pluginName) {
             if ($this->request->hasArgument($pluginName)) {
@@ -402,11 +474,12 @@ abstract class AbstractController extends ActionController implements LoggerAwar
      * Safely gets parameters from request if they exist
      *
      * @param string $parameterName
-     * @param array $pluginNames
+     * @param mixed[] $requestData
+     * @param string[] $pluginNames
      *
-     * @return null|string|array
+     * @return null|string|mixed[]
      */
-    private function getParameterFromRequestData(string $parameterName, array $requestData, array $pluginNames)
+    private function getParameterFromRequestData(string $parameterName, array $requestData, array $pluginNames): array|string|null
     {
         if (array_key_exists($parameterName, $requestData)) {
             return $requestData[$parameterName];
@@ -573,7 +646,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
      * @param PaginationInterface $pagination
      * @param PaginatorInterface $paginator
      *
-     * @return array
+     * @return mixed[]
      */
     //TODO: clean this function
     protected function buildSimplePagination(PaginationInterface $pagination, PaginatorInterface $paginator): array
@@ -690,6 +763,35 @@ abstract class AbstractController extends ActionController implements LoggerAwar
     }
 
     /**
+     * Get document from repository by uid.
+     *
+     * @access private
+     *
+     * @param int $documentId The document's UID
+     *
+     * @return AbstractDocument
+     */
+    private function getDocumentByUid(int $documentId)
+    {
+        $doc = null;
+        $this->document = $this->documentRepository->findOneByIdAndSettings($documentId);
+
+        if ($this->document) {
+            $doc = Helper::getDocumentInstance($this->document->getLocation(), $this->settings);
+            if ($doc !== null) {
+                $doc->configPid = $this->document->getPid();
+                $this->buildMultiViewDocuments($this->document->getLocation(), $doc);
+            }
+        }
+
+        if (!$this->document || $doc === null) {
+            $this->logger->error('Invalid UID "' . $documentId . '" or PID "' . $this->settings['storagePid'] . '" for document loading');
+        }
+
+        return $doc;
+    }
+
+    /**
      * Get document by URL.
      *
      * @access protected
@@ -700,8 +802,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
      */
     protected function getDocumentByUrl(string $documentUrl)
     {
-        $doc = AbstractDocument::getInstance($documentUrl, $this->settings);
-
+        $doc = Helper::getDocumentInstance($documentUrl, $this->settings);
         if ($doc !== null) {
             $this->buildMultiViewDocuments($documentUrl, $doc);
 
@@ -725,8 +826,14 @@ abstract class AbstractController extends ActionController implements LoggerAwar
 
     /**
      * For testing purposes only.
+     *
+     * @access public
+     *
+     * @param mixed[] $settings The settings to set
+     *
+     * @return void
      */
-    public function setSettingsForTest($settings)
+    public function setSettingsForTest(array $settings): void
     {
         $this->settings = $settings;
     }

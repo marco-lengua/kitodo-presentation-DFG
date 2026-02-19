@@ -14,6 +14,7 @@ namespace Kitodo\Dlf\Controller;
 use Kitodo\Dlf\Common\Helper;
 use Kitodo\Dlf\Common\MetsDocument;
 use Psr\Http\Message\ResponseInterface;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 
 /**
@@ -30,7 +31,7 @@ class TableOfContentsController extends AbstractController
      * This holds the active entries according to the currently selected page
      *
      * @access protected
-     * @var array This holds the active entries according to the currently selected page
+     * @var mixed[] This holds the active entries according to the currently selected page
      */
     protected array $activeEntries = [];
 
@@ -63,7 +64,7 @@ class TableOfContentsController extends AbstractController
      *
      * @access private
      *
-     * @return array HMENU array
+     * @return array<int, mixed> HMENU array
      */
     private function makeMenuArray(): array
     {
@@ -114,10 +115,10 @@ class TableOfContentsController extends AbstractController
      *
      * @access private
      *
-     * @param array $entry The entry's array from AbstractDocument->getLogicalStructure
+     * @param array<string, mixed> $entry The entry's array from AbstractDocument->getLogicalStructure
      * @param bool $recursive Whether to include the child entries
      *
-     * @return array HMENU array for menu entry
+     * @return array<string, mixed> HMENU array for menu entry
      */
     private function getMenuEntry(array $entry, bool $recursive = false): array
     {
@@ -127,7 +128,7 @@ class TableOfContentsController extends AbstractController
         // Set "title", "volume", "type" and "pagination" from $entry array.
         $entryArray['title'] = $this->setTitle($entry);
         $entryArray['volume'] = $entry['volume'];
-        if (isset($entry['videoChapter']) && $entry['videoChapter'] !== null) {
+        if (isset($entry['videoChapter'])) {
             // Now consumers such as `slub_digitalcollections` may intercept clicks on these links
             // and use the timecode to directly jump to that video position
             // NOTE: Remember that the URL also contains parameters such as `tx_dlf[page]` and `cHash`
@@ -136,7 +137,7 @@ class TableOfContentsController extends AbstractController
         }
         $entryArray['year'] = $entry['year'];
         $entryArray['orderlabel'] = $entry['orderlabel'];
-        $entryArray['type'] = $entry['type'];
+        $entryArray['type'] = $this->getTranslatedType($entry['type']);
         $entryArray['pagination'] = htmlspecialchars($entry['pagination']);
         $entryArray['_OVERRIDE_HREF'] = '';
         $entryArray['doNotLinkIt'] = 1;
@@ -184,14 +185,14 @@ class TableOfContentsController extends AbstractController
      *
      * @access private
      *
-     * @param array &$entryArray passed by reference
+     * @param array<string, mixed> &$entryArray passed by reference
      * @param mixed $id
      * @param mixed $points
      * @param mixed $targetUid
      *
      * @return void
      */
-    private function buildMenuLinks(array &$entryArray, $id, $points, $targetUid): void
+    private function buildMenuLinks(array &$entryArray, mixed $id, mixed $points, mixed $targetUid): void
     {
         if (
             !empty($points)
@@ -219,12 +220,15 @@ class TableOfContentsController extends AbstractController
     /**
      * Set basket if basket is included in settings.
      *
-     * @param array $entryArray passed by reference
+     * @access private
+     *
+     * @param array<string, mixed> $entryArray passed by reference
      * @param mixed $id
      * @param mixed $startPage
+     *
      * @return void
      */
-    private function setBasket(array &$entryArray, $id, $startPage): void
+    private function setBasket(array &$entryArray, mixed $id, mixed $startPage): void
     {
         if (isset($this->settings['basketButton'])) {
             $entryArray['basketButton'] = [
@@ -243,22 +247,27 @@ class TableOfContentsController extends AbstractController
      *
      * @access private
      *
-     * @param array $entry
+     * @param array<string, mixed> $entry
      *
-     * @return array
+     * @return array<string, mixed> updated $entry
      */
     private function resolveMenuEntry(array $entry): array
     {
         // If the menu entry points to the parent document,
         // resolve to the parent UID set on indexation.
         $doc = $this->document->getCurrentDocument();
-        if (
-            $doc instanceof MetsDocument
-            && ((array_key_exists('points', $entry) && $entry['points'] === $doc->parentHref) || $this->isMultiElement($entry['type']))
-            && !empty($this->document->getPartof())
-        ) {
-            unset($entry['points']);
-            $entry['targetUid'] = $this->document->getPartof();
+        if ($doc instanceof MetsDocument && array_key_exists('points', $entry)) {
+            if ($entry['points'] === $doc->parentHref || $this->isMultiElement($entry['type']) && !empty($this->document->getPartof())) {
+                unset($entry['points']);
+                $entry['targetUid'] = $this->document->getPartof();
+            } elseif (GeneralUtility::isValidUrl((string) $entry['points'])) {
+                // this case is for the newspaper issues pointing to the newspaper METS file (2 levels up)
+                $document = $this->documentRepository->findOneBy(['location' => $entry['points']]);
+                if ($document !== null) {
+                    unset($entry['points']);
+                    $entry['targetUid'] = $document->getUid();
+                }
+            }
         }
 
         return $entry;
@@ -337,7 +346,7 @@ class TableOfContentsController extends AbstractController
      *
      * @access private
      *
-     * @param array $entry
+     * @param array<string, mixed> $entry
      *
      * @return string
      */
@@ -371,7 +380,7 @@ class TableOfContentsController extends AbstractController
      *
      * @access private
      *
-     * @param array &$menu
+     * @param array<int, mixed[]> &$menu
      *
      * @return void
      */
@@ -390,7 +399,7 @@ class TableOfContentsController extends AbstractController
      *
      * @access private
      *
-     * @param array &$menu
+     * @param array<int, mixed[]> &$menu
      *
      * @return void
      */

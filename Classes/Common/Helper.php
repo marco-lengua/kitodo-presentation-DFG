@@ -12,6 +12,7 @@
 
 namespace Kitodo\Dlf\Common;
 
+use Exception;
 use TYPO3\CMS\Core\Configuration\ConfigurationManager;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Core\Environment;
@@ -73,20 +74,13 @@ class Helper
     /**
      * @access protected
      * @static
-     * @var array The locallang array for flash messages
-     */
-    protected static array $messages = [];
-
-    /**
-     * @access protected
-     * @static
-     * @var array A cache remembering which Solr core uid belongs to which index name
+     * @var mixed[]  A cache remembering which Solr core uid belongs to which index name
      */
     protected static array $indexNameCache = [];
 
     /**
      * @access protected
-     * @var array Assignment of mime type to model format
+     * @var array<string, string> Assignment of mime type to model format
      */
     protected const MIME_TYPE_MODEL_FORMATS = [
         'application/vnd.autodesk.fbx' => 'fbx',
@@ -102,6 +96,13 @@ class Helper
         'chemical/x-xyz' => 'xyz',
         'text/html' => 'html'
     ];
+
+    /**
+     * @access protected
+     * @static
+     * @var array<string, AbstractDocument> A list of loaded documents which can be accessed uniquely through a hash
+     */
+    protected static array $docs = [];
 
     /**
      * Generates a flash message and adds it to a message queue.
@@ -134,90 +135,6 @@ class Helper
     }
 
     /**
-     * Check if given identifier is a valid identifier of the German National Library
-     *
-     * @access public
-     *
-     * @static
-     *
-     * @param string $id The identifier to check
-     * @param string $type What type is the identifier supposed to be? Possible values: PPN, IDN, PND, ZDB, SWD, GKD
-     *
-     * @return bool Is $id a valid GNL identifier of the given $type?
-     */
-    public static function checkIdentifier(string $id, string $type): bool
-    {
-        $digits = substr($id, 0, 8);
-        $checksum = self::getChecksum($digits);
-        switch (strtoupper($type)) {
-            case 'PPN':
-            case 'IDN':
-            case 'PND':
-                if ($checksum == 10) {
-                    $checksum = 'X';
-                }
-                if (!preg_match('/\d{8}[\dX]{1}/i', $id)) {
-                    return false;
-                } elseif (strtoupper(substr($id, -1, 1)) != $checksum) {
-                    return false;
-                }
-                break;
-            case 'ZDB':
-                if ($checksum == 10) {
-                    $checksum = 'X';
-                }
-                if (!preg_match('/\d{8}-[\dX]{1}/i', $id)) {
-                    return false;
-                } elseif (strtoupper(substr($id, -1, 1)) != $checksum) {
-                    return false;
-                }
-                break;
-            case 'SWD':
-                $checksum = 11 - $checksum;
-                if (!preg_match('/\d{8}-\d{1}/i', $id)) {
-                    return false;
-                } elseif ($checksum == 10) {
-                    return self::checkIdentifier(((int) $digits + 1) . substr($id, -2, 2), 'SWD');
-                } elseif (substr($id, -1, 1) != $checksum) {
-                    return false;
-                }
-                break;
-            case 'GKD':
-                $checksum = 11 - $checksum;
-                if ($checksum == 10) {
-                    $checksum = 'X';
-                }
-                if (!preg_match('/\d{8}-[\dX]{1}/i', $id)) {
-                    return false;
-                } elseif (strtoupper(substr($id, -1, 1)) != $checksum) {
-                    return false;
-                }
-                break;
-        }
-        return true;
-    }
-
-    /**
-     * Get checksum for given digits.
-     *
-     * @access private
-     *
-     * @static
-     *
-     * @param string $digits
-     *
-     * @return int
-     */
-    private static function getChecksum(string $digits): int
-    {
-        $checksum = 0;
-        for ($i = 0, $j = strlen($digits); $i < $j; $i++) {
-            $checksum += (9 - $i) * (int) substr($digits, $i, 1);
-        }
-        return (11 - ($checksum % 11)) % 11;
-    }
-
-    /**
      * Decrypt encrypted value with given control hash
      *
      * @access public
@@ -226,9 +143,9 @@ class Helper
      *
      * @param string $encrypted The encrypted value to decrypt
      *
-     * @return mixed The decrypted value or false on error
+     * @return false|string The decrypted value or false on error
      */
-    public static function decrypt(string $encrypted)
+    public static function decrypt(string $encrypted): false|string
     {
         if (
             !in_array(self::$cipherAlgorithm, openssl_get_cipher_methods(true))
@@ -241,18 +158,22 @@ class Helper
             self::error('No encryption key set in TYPO3 configuration');
             return false;
         }
+
+        $length = openssl_cipher_iv_length(self::$cipherAlgorithm);
+
         if (
             empty($encrypted)
-            || strlen($encrypted) < openssl_cipher_iv_length(self::$cipherAlgorithm)
+            || strlen($encrypted) < $length
         ) {
             self::error('Invalid parameters given for decryption');
             return false;
         }
         // Split initialisation vector and encrypted data.
         $binary = base64_decode($encrypted);
-        $iv = substr($binary, 0, openssl_cipher_iv_length(self::$cipherAlgorithm));
-        $data = substr($binary, openssl_cipher_iv_length(self::$cipherAlgorithm));
-        $key = openssl_digest(self::getEncryptionKey(), self::$hashAlgorithm, true);
+        /** @var int $length */
+        $iv = substr($binary, 0, $length);
+        $data = substr($binary, $length);
+        $key = openssl_digest(self::getEncryptionKey(), self::$hashAlgorithm, true) ?: '';
         // Decrypt data.
         return openssl_decrypt($data, self::$cipherAlgorithm, $key, OPENSSL_RAW_DATA, $iv);
     }
@@ -269,7 +190,7 @@ class Helper
      *
      * @return \SimpleXMLElement|false
      */
-    public static function getXmlFileAsString($content)
+    public static function getXmlFileAsString($content): \SimpleXMLElement|false
     {
         // Don't make simplexml_load_string throw (when $content is an array
         // or object)
@@ -286,6 +207,23 @@ class Helper
         // Reset libxml's error logging.
         libxml_use_internal_errors($libxmlErrors);
         return $xml;
+    }
+
+    /**
+     * This method checks if a unique document (through hash) is already loaded and returns it. If not loaded yet it will load it into the list
+     *
+     * @param string $documentLocation The URL of XML file or the IRI of the IIIF resource
+     * @param mixed[] $settings
+     *
+     * @return AbstractDocument
+     */
+    public static function getDocumentInstance(string $documentLocation, array $settings): AbstractDocument|null
+    {
+        $hash = hash('sha256', $documentLocation);
+        if (!isset(static::$docs[$hash])) {
+            static::$docs[$hash] = AbstractDocument::getInstance($documentLocation, $settings);
+        }
+        return static::$docs[$hash];
     }
 
     /**
@@ -348,9 +286,9 @@ class Helper
      *
      * @param string $string The string to encrypt
      *
-     * @return mixed Hashed string or false on error
+     * @return false|string Hashed string or false on error
      */
-    public static function digest(string $string)
+    public static function digest(string $string): false|string
     {
         if (!in_array(self::$hashAlgorithm, openssl_get_md_methods(true))) {
             self::error('OpenSSL library doesn\'t support hash algorithm');
@@ -369,9 +307,9 @@ class Helper
      *
      * @param string $string The string to encrypt
      *
-     * @return mixed Encrypted string or false on error
+     * @return false|string Encrypted string or false on error
      */
-    public static function encrypt(string $string)
+    public static function encrypt(string $string): false|string
     {
         if (
             !in_array(self::$cipherAlgorithm, openssl_get_cipher_methods(true))
@@ -385,8 +323,8 @@ class Helper
             return false;
         }
         // Generate random initialization vector.
-        $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length(self::$cipherAlgorithm));
-        $key = openssl_digest(self::getEncryptionKey(), self::$hashAlgorithm, true);
+        $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length(self::$cipherAlgorithm) ?: 0);
+        $key = openssl_digest(self::getEncryptionKey(), self::$hashAlgorithm, true) ?: '';
         // Encrypt data.
         $encrypted = openssl_encrypt($string, self::$cipherAlgorithm, $key, OPENSSL_RAW_DATA, $iv);
         // Merge initialization vector and encrypted data.
@@ -394,29 +332,6 @@ class Helper
             $encrypted = base64_encode($iv . $encrypted);
         }
         return $encrypted;
-    }
-
-    /**
-     * Clean up a string to use in a URL.
-     *
-     * @access public
-     *
-     * @static
-     *
-     * @param string $string The string to clean up
-     *
-     * @return string The cleaned up string
-     */
-    public static function getCleanString(string $string): string
-    {
-        // Convert to lowercase.
-        $string = strtolower($string);
-        // Remove non-alphanumeric characters.
-        $string = preg_replace('/[^a-z\d_\s-]/', '', $string);
-        // Remove multiple dashes or whitespaces.
-        $string = preg_replace('/[\s-]+/', ' ', $string);
-        // Convert whitespaces and underscore to dash.
-        return preg_replace('/[\s_]/', '-', $string);
     }
 
     /**
@@ -428,13 +343,14 @@ class Helper
      *
      * @param string $scriptRelPath The path to the class file
      *
-     * @return array Array of hook objects for the class
+     * @return mixed[] Array of hook objects for the class
      */
     public static function getHookObjects(string $scriptRelPath): array
     {
         $hookObjects = [];
         if (is_array(self::getOptions()[self::$extKey . '/' . $scriptRelPath]['hookClass'] ?? null)) {
             foreach (self::getOptions()[self::$extKey . '/' . $scriptRelPath]['hookClass'] as $classRef) {
+                // @phpstan-ignore-next-line
                 $hookObjects[] = GeneralUtility::makeInstance($classRef);
             }
         }
@@ -509,8 +425,10 @@ class Helper
      * @access public
      *
      * @static
+     *
+     * @return void
      */
-    public static function resetIndexNameCache()
+    public static function resetIndexNameCache(): void
     {
         self::$indexNameCache = [];
     }
@@ -556,7 +474,7 @@ class Helper
      *
      * @param int $pid Get the "index_name" from this page only
      *
-     * @return array
+     * @return mixed[]
      */
     public static function getDocumentStructures(int $pid = -1): array
     {
@@ -589,7 +507,7 @@ class Helper
     }
 
     /**
-     * Determine whether or not $url is a valid URL using HTTP or HTTPS scheme.
+     * Determine whether $url is a valid URL using HTTP or HTTPS scheme.
      *
      * @access public
      *
@@ -619,14 +537,14 @@ class Helper
      *
      * @access public
      *
-     * @param array $data Data map
-     * @param array $cmd Command map
+     * @param mixed[] $data Data map
+     * @param mixed[] $cmd Command map
      * @param bool $reverseOrder Should the data map be reversed?
      * @param bool $cmdFirst Should the command map be processed first?
      *
-     * @return array Array of substituted "NEW..." identifiers and their actual UIDs.
+     * @return mixed[] Array of substituted "NEW..." identifiers and their actual UIDs.
      */
-    public static function processDatabaseAsAdmin(array $data = [], array $cmd = [], $reverseOrder = false, $cmdFirst = false)
+    public static function processDatabaseAsAdmin(array $data = [], array $cmd = [], bool $reverseOrder = false, bool $cmdFirst = false): array
     {
         $context = GeneralUtility::makeInstance(Context::class);
 
@@ -733,120 +651,43 @@ class Helper
      */
     public static function translate(string $indexName, string $table, string $pid): string
     {
-        // Load labels into static variable for future use.
-        static $labels = [];
-        // Sanitize input.
-        $pid = max((int) $pid, 0);
-        if (!$pid) {
-            self::warning('Invalid PID ' . $pid . ' for translation');
+        //Check if this table is allowed for translation.
+        if (!in_array($table, ['tx_dlf_collections', 'tx_dlf_libraries', 'tx_dlf_metadata', 'tx_dlf_metadatasubentries', 'tx_dlf_structures'])) {
             return $indexName;
         }
-        /** @var PageRepository $pageRepository */
-        $pageRepository = GeneralUtility::makeInstance(PageRepository::class);
-
+        //Get LanguageId (sys_language_uid in Backend) from context
         $languageAspect = GeneralUtility::makeInstance(Context::class)->getAspect('language');
-        $languageContentId = $languageAspect->getContentId();
+        $languageId = $languageAspect->getContentId();
+        //static Array to save all already queried Translations
+        static $translations = [];
+        //Query Backend for translations for one table and PID combination - only query if not yet done
+        if (empty($translations[$table][$pid])) {
+            try {
+                $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+                    ->getQueryBuilderForTable($table);
 
-        // Check if "index_name" is a UID.
-        if (MathUtility::canBeInterpretedAsInteger($indexName)) {
-            $indexName = self::getIndexNameFromUid((int) $indexName, $table, $pid);
-        }
-        /* $labels already contains the translated content element, but with the index_name of the translated content element itself
-         * and not with the $indexName of the original that we receive here. So we have to determine the index_name of the
-         * associated translated content element. E.g. $labels['title0'] != $indexName = title. */
-
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getQueryBuilderForTable($table);
-
-        // First fetch the uid of the received index_name
-        $result = $queryBuilder
-            ->select(
-                $table . '.uid AS uid',
-                $table . '.l18n_parent AS l18n_parent'
-            )
-            ->from($table)
-            ->where(
-                $queryBuilder->expr()->eq($table . '.pid', $pid),
-                $queryBuilder->expr()->eq($table . '.index_name', $queryBuilder->expr()->literal($indexName)),
-                self::whereExpression($table, true)
-            )
-            ->setMaxResults(1)
-            ->executeQuery();
-
-        $row = $result->fetchAssociative();
-
-        if ($row) {
-            // Now we use the uid of the l18_parent to fetch the index_name of the translated content element.
-            $result = $queryBuilder
-                ->select($table . '.index_name AS index_name')
-                ->from($table)
-                ->where(
-                    $queryBuilder->expr()->eq($table . '.pid', $pid),
-                    $queryBuilder->expr()->eq($table . '.uid', $row['l18n_parent']),
-                    $queryBuilder->expr()->eq($table . '.sys_language_uid', (int) $languageContentId),
-                    self::whereExpression($table, true)
-                )
-                ->setMaxResults(1)
-                ->executeQuery();
-
-            $row = $result->fetchAssociative();
-
-            if ($row) {
-                // If there is a translated content element, overwrite the received $indexName.
-                $indexName = $row['index_name'];
-            }
-        }
-
-        // Check if we already got a translation.
-        if (empty($labels[$table][$pid][$languageContentId][$indexName])) {
-            // Check if this table is allowed for translation.
-            if (in_array($table, ['tx_dlf_collections', 'tx_dlf_libraries', 'tx_dlf_metadata', 'tx_dlf_metadatasubentries', 'tx_dlf_structures'])) {
-                $additionalWhere = $queryBuilder->expr()->in($table . '.sys_language_uid', [-1, 0]);
-                if ($languageContentId > 0) {
-                    $additionalWhere = $queryBuilder->expr()->and(
-                        $queryBuilder->expr()->or(
-                            $queryBuilder->expr()->in($table . '.sys_language_uid', [-1, 0]),
-                            $queryBuilder->expr()->eq($table . '.sys_language_uid', (int) $languageContentId)
-                        ),
-                        $queryBuilder->expr()->eq($table . '.l18n_parent', 0)
-                    );
-                }
-
-                // Get labels from database.
-                $result = $queryBuilder
-                    ->select('*')
-                    ->from($table)
+                $rows = $queryBuilder
+                    ->select(
+                        $table . '.label AS label',
+                        $table . '.index_name AS index_name',
+                        $table . '.sys_language_uid As sys_language_uid'
+                    )
                     ->where(
                         $queryBuilder->expr()->eq($table . '.pid', $pid),
-                        $additionalWhere,
-                        self::whereExpression($table, true)
+                        $queryBuilder->expr()->eq($table . '.deleted', 0)
                     )
-                    ->setMaxResults(10000)
-                    ->executeQuery();
-
-                if ($result->rowCount() > 0) {
-                    while ($resArray = $result->fetchAssociative()) {
-                        // Overlay localized labels if available.
-                        if ($languageContentId > 0) {
-                            $resArray = $pageRepository->getLanguageOverlay($table, $resArray, $languageAspect);
-                        }
-                        if ($resArray) {
-                            $labels[$table][$pid][$languageContentId][$resArray['index_name']] = $resArray['label'];
-                        }
-                    }
-                } else {
-                    self::notice('No translation with PID ' . $pid . ' available in table "' . $table . '" or translation not accessible');
+                    ->from($table)
+                    ->executeQuery()
+                    ->fetchAllAssociative();
+                foreach ($rows as $row) {
+                    $translations[$table][$pid][$row['index_name']][(int) $row['sys_language_uid']] = ['label' => $row['label']];
                 }
-            } else {
-                self::warning('No translations available for table "' . $table . '"');
+            } catch (Exception $e) {
+                self::error('Error querying backend pool: ' . $e->getMessage());
             }
         }
-
-        if (!empty($labels[$table][$pid][$languageContentId][$indexName])) {
-            return $labels[$table][$pid][$languageContentId][$indexName];
-        } else {
-            return $indexName;
-        }
+        //return translation based on parameters table, PID, indexName and languageId, else return indexName
+        return isset($translations[$table][$pid][$indexName][$languageId]) ? $translations[$table][$pid][$indexName][$languageId]['label'] : $indexName;
     }
 
     /**
@@ -926,9 +767,9 @@ class Helper
      *
      * @param string $url
      *
-     * @return string|bool
+     * @return bool|string
      */
-    public static function getUrl(string $url)
+    public static function getUrl(string $url): bool|string
     {
         if (!Helper::isValidHttpUrl($url)) {
             return false;
@@ -978,7 +819,7 @@ class Helper
      *
      * @static
      *
-     * @return array
+     * @return mixed[]
      */
     private static function getOptions(): array
     {
@@ -1010,11 +851,11 @@ class Helper
      *
      * @return mixed
      */
-    private static function getLocalConfigurationByPath(string $path)
+    private static function getLocalConfigurationByPath(string $path): mixed
     {
         $configurationManager = GeneralUtility::makeInstance(ConfigurationManager::class);
 
-        if (array_key_exists(strtok($path, '/'), $configurationManager->getLocalConfiguration())) {
+        if (array_key_exists(strtok($path, '/') ?: '', $configurationManager->getLocalConfiguration())) {
             return $configurationManager->getLocalConfigurationValueByPath($path);
         }
 
@@ -1027,9 +868,11 @@ class Helper
      * This method checks if the provided file array contains a specified mimetype key and
      * verifies if the mimetype belongs to any of the allowed mimetypes or matches any of the additional custom mimetypes.
      *
+     * @access public
+     *
      * @param mixed $file The file array to filter
-     * @param array $allowedCategories The allowed MIME type categories to filter by (e.g., ['audio'], ['video'] or ['image', 'application'])
-     * @param null|bool|array $dlfMimeTypes Optional array of custom dlf mimetype keys to filter by. Default is null.
+     * @param mixed[] $allowedCategories The allowed MIME type categories to filter by (e.g., ['audio'], ['video'] or ['image', 'application'])
+     * @param null|bool|mixed[] $dlfMimeTypes Optional array of custom dlf mimetype keys to filter by. Default is null.
      *                      - null: use no custom dlf mimetypes
      *                      - true: use all custom dlf mimetypes
      *                      - array: use only specific types - Accepted values: 'IIIF', 'IIP', 'ZOOMIFY', 'JPG'
@@ -1086,8 +929,13 @@ class Helper
     /**
      * Get file extensions for a given MIME type
      *
+     * @access public
+     *
+     * @static
+     *
      * @param string $mimeType
-     * @return array
+     *
+     * @return string[]
      */
     public static function getFileExtensionsForMimeType(string $mimeType): array
     {
@@ -1098,8 +946,11 @@ class Helper
     /**
      * Get MIME types for a given file extension
      *
+     * @access public
+     *
      * @param string $fileExtension
-     * @return array
+     *
+     * @return string[]
      */
     public static function getMimeTypesForFileExtension(string $fileExtension): array
     {
@@ -1110,7 +961,12 @@ class Helper
     /**
      * Get the assigned model format of mime type.
      *
+     * @access public
+     *
+     * @static
+     *
      * @param string $mimeType The mime type of file
+     *
      * @return string The model format
      */
     public static function getModelFormatOfMimeType(string $mimeType): string

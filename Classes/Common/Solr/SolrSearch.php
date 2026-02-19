@@ -7,12 +7,15 @@ use Kitodo\Dlf\Common\AbstractDocument;
 use Kitodo\Dlf\Common\Helper;
 use Kitodo\Dlf\Common\Indexer;
 use Kitodo\Dlf\Common\Solr\SearchResult\ResultDocument;
+use Kitodo\Dlf\Domain\Model\Collection;
+use Kitodo\Dlf\Domain\Model\Metadata;
 use Kitodo\Dlf\Domain\Repository\DocumentRepository;
 use Solarium\QueryType\Select\Result\Document;
 use TYPO3\CMS\Core\Cache\CacheManager;
+use TYPO3\CMS\Core\Log\Logger;
+use TYPO3\CMS\Core\Log\LogManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
-use TYPO3\CMS\Extbase\Persistence\Generic\QueryResult;
 use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
 use TYPO3\CMS\Extbase\Persistence\QueryInterface;
 
@@ -29,7 +32,7 @@ use TYPO3\CMS\Extbase\Persistence\QueryInterface;
  *
  * @access public
  */
-class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInterface
+class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInterface // @phpstan-ignore-line
 {
     /**
      * @access private
@@ -39,45 +42,51 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
 
     /**
      * @access private
-     * @var array|QueryResultInterface
+     * @var mixed[]|QueryResultInterface<int, Collection>
      */
     private $collections;
 
     /**
      * @access private
-     * @var array
+     * @var mixed[]
      */
     private array $settings;
 
     /**
      * @access private
-     * @var array
+     * @var mixed[]
      */
     private array $searchParams;
 
     /**
      * @access private
-     * @var QueryResultInterface|null
+     * @var QueryResultInterface<int, Metadata>|null
      */
     private ?QueryResultInterface $listedMetadata;
 
     /**
      * @access private
-     * @var QueryResultInterface|null
+     * @var QueryResultInterface<int, Metadata>|null
      */
     private ?QueryResultInterface $indexedMetadata;
 
     /**
      * @access private
-     * @var array
+     * @var Logger This holds the logger
+     */
+    private Logger $logger;
+
+    /**
+     * @access private
+     * @var mixed[]
      */
     private array $params;
 
     /**
      * @access private
-     * @var array
+     * @var mixed[]|null
      */
-    private $result;
+    private ?array $result;
 
     /**
      * @access private
@@ -91,11 +100,11 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      * @access public
      *
      * @param DocumentRepository $documentRepository
-     * @param array|QueryResultInterface $collections can contain 0, 1 or many Collection objects
-     * @param array $settings
-     * @param array $searchParams
-     * @param QueryResultInterface|null $listedMetadata
-     * @param QueryResultInterface|null $indexedMetadata
+     * @param mixed[]|QueryResultInterface<int, Collection> $collections can contain 0, 1 or many Collection objects
+     * @param mixed[] $settings
+     * @param mixed[] $searchParams
+     * @param QueryResultInterface<int, Metadata>|null $listedMetadata
+     * @param QueryResultInterface<int, Metadata>|null $indexedMetadata
      *
      * @return void
      */
@@ -113,6 +122,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
         $this->searchParams = $searchParams;
         $this->listedMetadata = $listedMetadata;
         $this->indexedMetadata = $indexedMetadata;
+        $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger(static::class);
     }
 
     /**
@@ -148,7 +158,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      *
      * @access public
      *
-     * @return array
+     * @return mixed[]
      */
     public function current(): array
     {
@@ -337,7 +347,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      *
      * @return void
      */
-    public function setQuery(QueryInterface $query): void
+    public function setQuery(QueryInterface $query): void // @phpstan-ignore-line
     {
         throw new Exception("setQuery not supported on SolrSearch instance");
     }
@@ -359,7 +369,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      *
      * @access public
      *
-     * @return array
+     * @return mixed[]
      */
     public function toArray(): array
     {
@@ -487,11 +497,11 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
         $params['listMetadataRecords'] = [];
 
         // Restrict the fields to the required ones.
-        $params['fields'] = 'uid,id,page,title,thumbnail,partof,toplevel,type';
+        $params['fields'] = 'uid,id,page,title,thumbnail,partof,toplevel,type,structure_path';
 
         if ($this->listedMetadata) {
             foreach ($this->listedMetadata as $metadata) {
-                /** @var \Kitodo\Dlf\Domain\Model\Metadata $metadata */
+                /** @var Metadata $metadata */
                 if ($metadata->getIndexStored() || $metadata->getIndexIndexed()) {
                     $listMetadataRecord = $metadata->getIndexName() . '_' . ($metadata->getIndexTokenized() ? 't' : 'u') . ($metadata->getIndexStored() ? 's' : 'u') . ($metadata->getIndexIndexed() ? 'i' : 'u');
                     $params['fields'] .= ',' . $listMetadataRecord;
@@ -517,14 +527,14 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      *
      * @return void
      */
-    public function submit($start, $rows, $processResults = true)
+    public function submit(int $start, int $rows, bool $processResults = true): void
     {
         $params = $this->params;
         $params['start'] = $start;
         $params['rows'] = $rows;
 
         // Perform search.
-        $result = $this->searchSolr($params, true);
+        $result = $this->searchSolr($params);
 
         // Initialize values
         $documents = [];
@@ -560,6 +570,31 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
                             $searchResult['page'] = $doc['page'];
                             $searchResult['thumbnail'] = $doc['thumbnail'];
                             $searchResult['structure'] = $doc['type'];
+                            // create string(s) from structure path(s)
+                            $encodedStructurePaths = $doc['structure_path'] ?? [];
+                            if (!is_array($encodedStructurePaths)) {
+                                $encodedStructurePaths = [$encodedStructurePaths];
+                            }
+                            $structurePathStrings = [];
+                            foreach ($encodedStructurePaths as $jsonString) {
+                                if (!is_string($jsonString) || $jsonString === '') {
+                                    continue;
+                                }
+                                $segments = json_decode($jsonString, true);
+                                if ($segments === null && json_last_error() !== JSON_ERROR_NONE) {
+                                    continue;
+                                }
+                                $structurePathLabels = [];
+                                foreach ($segments as $currentSegment) {
+                                    if (isset($currentSegment['type'])) {
+                                        $structurePathLabels[] = Helper::translate($currentSegment['type'], 'tx_dlf_structures', $this->settings['storagePid']);
+                                    } elseif (!empty($currentSegment['label'])) {
+                                        $structurePathLabels[] = $currentSegment['label'];
+                                    }
+                                }
+                                $structurePathStrings[] = implode(' → ', $structurePathLabels);
+                            }
+                            $searchResult['structure_path'] = $structurePathStrings;
                             $searchResult['title'] = $doc['title'];
                             foreach ($params['listMetadataRecords'] as $indexName => $solrField) {
                                 if (isset($doc['metadata'][$indexName])) {
@@ -569,13 +604,19 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
                             if (array_key_exists('fulltext', $this->searchParams) && $this->searchParams['fulltext'] == '1') {
                                 $searchResult['snippet'] = $doc['snippet'];
                                 $searchResult['highlight'] = $doc['highlight'];
-                                $searchResult['highlight_word'] = preg_replace('/^;|;$/', '',       // remove ; at beginning or end
-                                                                  preg_replace('/;+/', ';',         // replace any multiple of ; with a single ;
-                                                                  preg_replace('/[{~\d*}{\s+}{^=*\d+.*\d*}{\sAND\s}{\sOR\s}{\sNOT\s}`~!@#$%\^&*()_|+-=?;:\'",.<>\{\}\[\]\\\]/', ';', $this->searchParams['query']))); // replace search operators and special characters with ;
+                                $searchResult['highlight_word'] = preg_replace(
+                                    '/^;|;$/', '',  // remove ; at beginning or end
+                                    preg_replace(
+                                        '/;+/', ';',  // replace any multiple of ; with a single ;
+                                        preg_replace(
+                                            '/[{~\d*}{\s+}{^=*\d+.*\d*}{\sAND\s}{\sOR\s}{\sNOT\s}`~!@#$%\^&*()_|+-=?;:\'",.<>\{\}\[\]\\\]/', ';', $this->searchParams['query']
+                                        )
+                                    )
+                                ); // replace search operators and special characters with ;
                             }
                             $documents[$doc['uid']]['searchResults'][] = $searchResult;
                         }
-                    } else if ($doc['toplevel'] === true) {
+                    } elseif ($doc['toplevel'] === true) {
                         foreach ($params['listMetadataRecords'] as $indexName => $solrField) {
                             if (isset($doc['metadata'][$indexName])) {
                                 $documents[$doc['uid']]['metadata'][$indexName] = $doc['metadata'][$indexName];
@@ -593,23 +634,29 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
                                     $batch = array_slice($children, $start, $batchSize, true);
 
                                     // Fetch metadata for the current batch
-                                    $metadataOf = $this->fetchToplevelMetadataFromSolr([
-                                        'query' => 'partof:' . $doc['uid'],
-                                        'start' => $start,
-                                        'rows' => min($batchSize, $totalChildren - $start),
-                                    ]);
+                                    $metadataOf = $this->fetchToplevelMetadataFromSolr(
+                                        [
+                                            'query' => 'partof:' . $doc['uid'],
+                                            'start' => $start,
+                                            'rows' => min($batchSize, $totalChildren - $start),
+                                        ]
+                                    );
 
                                     foreach ($batch as $docChild) {
                                         // We need only a few fields from the children, but we need them as an array.
-                                        $childDocument = [
-                                            'thumbnail' => $docChild['thumbnail'],
-                                            'title' => $docChild['title'],
-                                            'structure' => $docChild['structure'],
-                                            'metsOrderlabel' => $docChild['metsOrderlabel'],
-                                            'uid' => $docChild['uid'],
-                                            'metadata' => $metadataOf[$docChild['uid']],
-                                        ];
-                                        $documents[$doc['uid']]['children'][$docChild['uid']] = $childDocument;
+                                        if (array_key_exists($docChild['uid'], $metadataOf)) {
+                                            $childDocument = [
+                                                'thumbnail' => $docChild['thumbnail'],
+                                                'title' => $docChild['title'],
+                                                'structure' => $docChild['structure'],
+                                                'metsOrderlabel' => $docChild['metsOrderlabel'],
+                                                'uid' => $docChild['uid'],
+                                                'metadata' => $metadataOf[$docChild['uid']],
+                                            ];
+                                            $documents[$doc['uid']]['children'][$docChild['uid']] = $childDocument;
+                                        } else {
+                                            $this->logger->warning("Child with UID " . $docChild['uid'] . " could not be fetched from Solr");
+                                        }
                                     }
                                 }
                             }
@@ -627,9 +674,9 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      *
      * @access protected
      *
-     * @param array $queryParams
+     * @param mixed[] $queryParams
      *
-     * @return array
+     * @return mixed[]
      */
     protected function fetchToplevelMetadataFromSolr(array $queryParams): array
     {
@@ -645,7 +692,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
 
         if ($this->listedMetadata) {
             foreach ($this->listedMetadata as $metadata) {
-                /** @var \Kitodo\Dlf\Domain\Model\Metadata $metadata */
+                /** @var Metadata $metadata */
                 if ($metadata->getIndexStored() || $metadata->getIndexIndexed()) {
                     $listMetadataRecord = $metadata->getIndexName() . '_' . ($metadata->getIndexTokenized() ? 't' : 'u') . ($metadata->getIndexStored() ? 's' : 'u') . ($metadata->getIndexIndexed() ? 'i' : 'u');
                     $params['fields'] .= ',' . $listMetadataRecord;
@@ -657,7 +704,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
         $params['filterquery'][] = ['query' => 'toplevel:true'];
 
         // Perform search.
-        $result = $this->searchSolr($params, true);
+        $result = $this->searchSolr($params);
 
         foreach ($result['documents'] as $doc) {
             $this->translateLanguageCode($doc);
@@ -672,16 +719,16 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      *
      * @access protected
      *
-     * @param array $parameters Additional search parameters
+     * @param mixed[] $parameters Additional search parameters
      * @param boolean $enableCache Enable caching of Solr requests
      *
-     * @return array The Apache Solr Documents that were fetched
+     * @return mixed[] The Apache Solr Documents that were fetched
      */
-    protected function searchSolr($parameters = [], $enableCache = true)
+    protected function searchSolr(array $parameters = [], bool $enableCache = true): array
     {
         // Set query.
-        $parameters['query'] = isset($parameters['query']) ? $parameters['query'] : '*';
-        $parameters['filterquery'] = isset($parameters['filterquery']) ? $parameters['filterquery'] : [];
+        $parameters['query'] = $parameters['query'] ?? '*';
+        $parameters['filterquery'] = $parameters['filterquery'] ?? [];
 
         // Perform Solr query.
         // Instantiate search object.
@@ -699,7 +746,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
         $cache = null;
         // Calculate cache identifier.
         if ($enableCache === true) {
-            $cacheIdentifier = Helper::digest($solr->core . print_r($parameters, true));
+            $cacheIdentifier = Helper::digest($solr->core . print_r($parameters, true)) ?: '';
             $cache = GeneralUtility::makeInstance(CacheManager::class)->getCache('tx_dlf_solr');
         }
         $resultSet = [
@@ -707,7 +754,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
             'numberOfToplevels' => 0,
             'numFound' => 0,
         ];
-        if ($enableCache === false || ($entry = $cache->get($cacheIdentifier)) === false) {
+        if ($enableCache === false || $cache->get($cacheIdentifier) === false) {
             $selectQuery = $solr->service->createSelect($parameters);
 
             $edismax = $selectQuery->getEDisMax();
@@ -716,7 +763,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
 
             if ($this->indexedMetadata) {
                 foreach ($this->indexedMetadata as $metadata) {
-                    /** @var \Kitodo\Dlf\Domain\Model\Metadata $metadata */
+                    /** @var Metadata $metadata */
                     if ($metadata->getIndexIndexed()) {
                         $listMetadataRecord = $metadata->getIndexName() . '_' . ($metadata->getIndexTokenized() ? 't' : 'u') . ($metadata->getIndexStored() ? 's' : 'u') . 'i';
                         $queryFields .= $listMetadataRecord . '^' . $metadata->getIndexBoost() . ' ';
@@ -784,7 +831,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
             }
         } else {
             // Return cache hit.
-            $resultSet = $entry;
+            $resultSet = $cache->get($cacheIdentifier);
         }
         return $resultSet;
     }
@@ -816,11 +863,11 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
 
         // distinguish between simple collection browsing and actual searching within the collection(s)
         if (!empty($collectionsQueryString)) {
-            if (empty($query)) {
-                $collectionsQueryString = '(collection_faceting:(' . $collectionsQueryString . ') AND toplevel:true AND partof:0)';
-            } else {
-                $collectionsQueryString = '(collection_faceting:(' . $collectionsQueryString . '))';
+            $collectionsQueryString = '(collection_faceting:(' . $collectionsQueryString . ')';
+            if (empty($query) || $query === '*') {
+                $collectionsQueryString .= ' AND toplevel:true AND partof:0';
             }
+            $collectionsQueryString .= ')';
         }
 
         // virtual collections might query documents that are neither toplevel:true nor partof:0 and need to be searched separately
@@ -834,6 +881,8 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
 
     /**
      * Filter collections to avoid null values.
+     *
+     * @access private
      *
      * @return void
      */
@@ -849,7 +898,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      *
      * @access private
      *
-     * @return array
+     * @return array<string, string>
      */
     private function getSort() : array
     {
@@ -873,13 +922,14 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      * @access private
      *
      * @param Document $record
-     * @param array $highlighting
-     * @param array $fields
-     * @param array $parameters
+     * @param mixed[] $highlighting
+     * @param string[] $fields
+     * @param mixed[] $parameters
      *
-     * @return array The Apache Solr Documents that were fetched
+     * @return array<string, mixed> The Apache Solr Documents that were fetched
      */
-    private function getDocument(Document $record, array $highlighting, array $fields, $parameters) {
+    private function getDocument(Document $record, array $highlighting, array $fields, array $parameters): array
+    {
         $resultDocument = new ResultDocument($record, $highlighting, $fields);
 
         $document = [
@@ -890,6 +940,7 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
             'title' => $resultDocument->getTitle(),
             'toplevel' => $resultDocument->getToplevel(),
             'type' => $resultDocument->getType(),
+            'structure_path' => $resultDocument->getStructurePath(),
             'uid' => !empty($resultDocument->getUid()) ? $resultDocument->getUid() : $parameters['uid'],
             'highlight' => $resultDocument->getHighlightsIds(),
         ];
@@ -908,14 +959,14 @@ class SolrSearch implements \Countable, \Iterator, \ArrayAccess, QueryResultInte
      *
      * @access private
      *
-     * @param &$doc document array
+     * @param mixed[] &$doc document array
      *
      * @return void
      */
-    private function translateLanguageCode(&$doc): void
+    private function translateLanguageCode(array &$doc): void
     {
         if (is_array($doc['metadata'] ?? null) && array_key_exists('language', $doc['metadata'])) {
-            foreach($doc['metadata']['language'] as $indexName => $language) {
+            foreach ($doc['metadata']['language'] as $indexName => $language) {
                 $doc['metadata']['language'][$indexName] = Helper::getLanguageName($language);
             }
         }

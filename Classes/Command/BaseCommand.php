@@ -13,7 +13,6 @@
 namespace Kitodo\Dlf\Command;
 
 use Kitodo\Dlf\Common\AbstractDocument;
-use Kitodo\Dlf\Common\Helper;
 use Kitodo\Dlf\Common\Indexer;
 use Kitodo\Dlf\Domain\Repository\CollectionRepository;
 use Kitodo\Dlf\Domain\Repository\DocumentRepository;
@@ -24,6 +23,7 @@ use Kitodo\Dlf\Domain\Model\Document;
 use Kitodo\Dlf\Domain\Model\Library;
 use Kitodo\Dlf\Validation\DocumentValidator;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Core\SystemEnvironmentBuilder;
 use TYPO3\CMS\Core\Http\ServerRequest;
@@ -83,7 +83,7 @@ class BaseCommand extends Command
 
     /**
      * @access protected
-     * @var array
+     * @var mixed[]
      */
     protected array $extConf;
 
@@ -145,12 +145,12 @@ class BaseCommand extends Command
      *
      * @access protected
      *
-     * @param array $solrCores array of the valid Solr cores
-     * @param string|bool|null $inputSolrId possible uid or name of Solr core
+     * @param array<string, int> $solrCores array of the valid Solr cores
+     * @param bool|string|null $inputSolrId possible uid or name of Solr core
      *
-     * @return int matching uid of Solr core
+     * @return ?int matching uid of Solr core
      */
-    protected function getSolrCoreUid(array $solrCores, $inputSolrId): ?int
+    protected function getSolrCoreUid(array $solrCores, bool|string|null $inputSolrId): ?int
     {
         if (MathUtility::canBeInterpretedAsInteger($inputSolrId)) {
             $solrCoreUid = MathUtility::forceIntegerInRange((int) $inputSolrId, 0);
@@ -167,7 +167,7 @@ class BaseCommand extends Command
      *
      * @param int $pageId The UID of the Solr core or 0 to disable indexing
      *
-     * @return array Array of valid Solr cores
+     * @return array<string, int> Array of valid Solr cores
      */
     protected function getSolrCores(int $pageId): array
     {
@@ -191,6 +191,28 @@ class BaseCommand extends Command
         }
 
         return $solrCores;
+    }
+
+    /**
+     * Set owner based on input value.
+     *
+     * @access protected
+     *
+     * @param bool|string|null $owner input owner value
+     *
+     * @return void
+     */
+    protected function setOwner(bool|string|null $owner): void
+    {
+        if (!empty($owner)) {
+            if (MathUtility::canBeInterpretedAsInteger($owner)) {
+                $this->owner = $this->libraryRepository->findByUid(MathUtility::forceIntegerInRange((int) $owner, 1));
+            } else {
+                $this->owner = $this->libraryRepository->findOneBy(['indexName' => (string) $owner]);
+            }
+        } else {
+            $this->owner = null;
+        }
     }
 
     /**
@@ -253,7 +275,7 @@ class BaseCommand extends Command
             $document->setRightsInfo($metadata['rights_info'][0] ?? '');
             $document->setStatus(0);
 
-            $this->setOwner($metadata['owner'][0] ?? '');
+            $this->setNewOwner($metadata['owner'][0] ?? '');
             $document->setOwner($this->owner);
 
             // set volume data
@@ -327,12 +349,67 @@ class BaseCommand extends Command
     }
 
     /**
+     * Handle PID error output.
+     *
+     * @access protected
+     *
+     * @param SymfonyStyle $io
+     *
+     * @return int
+     */
+    protected function handlePidError(SymfonyStyle $io): int
+    {
+        $io->error('No valid PID (' . $this->storagePid . ') given.');
+        return Command::FAILURE;
+    }
+
+    /**
+     * Handle Solr error output.
+     *
+     * @access protected
+     *
+     * @param array<string, int> $allSolrCores array of the valid Solr cores
+     * @param mixed $solr input Solr core value
+     * @param SymfonyStyle $io
+     *
+     * @return int
+     */
+    protected function handleSolrError(array $allSolrCores, mixed $solr, SymfonyStyle $io): int
+    {
+        $outputSolrCores = [];
+        foreach ($allSolrCores as $indexName => $uid) {
+            $outputSolrCores[] = $uid . ' : ' . $indexName;
+        }
+        if (empty($outputSolrCores)) {
+            $io->error('No valid Solr core ("' . $solr . '") given. No valid cores found on PID ' . $this->storagePid . ".\n");
+        } else {
+            $io->error('No valid Solr core ("' . $solr . '") given. ' . "Valid cores are (<uid>:<index_name>):\n" . implode("\n", $outputSolrCores) . "\n");
+        }
+        return Command::FAILURE;
+    }
+
+    /**
+     * Handle Solr missing output.
+     *
+     * @access protected
+     *
+     * @param SymfonyStyle $io
+     *
+     * @return int
+     */
+    protected function handleSolrMissingError(SymfonyStyle $io): int
+    {
+        $io->error('Required parameter --solr|-s is missing or array.');
+        return Command::FAILURE;
+    }
+
+    /**
      * Add collections.
      *
      * @access private
-     * 
+     *
      * @param Document &$document
-     * @param array $collections
+     * @param array<string> $collections
      *
      * @return void
      */
@@ -353,9 +430,9 @@ class BaseCommand extends Command
                     // some more unreserved characters are not allowed.
                     // Convert whitespaces to dash.
                     $setSpec = $collection;
-                    $setSpec = preg_replace('/[\s]/', '-', $setSpec);
+                    $setSpec = preg_replace('/\s/', '-', $setSpec);
                     // Remove multiple dashes.
-                    $setSpec = preg_replace('/[-]{2,}/', '-', $setSpec);
+                    $setSpec = preg_replace('/-{2,}/', '-', $setSpec);
                     // Remove undesired characters.
                     $setSpec = preg_replace('/[^\w:-]/', '', $setSpec);
                     // A hierarchical setSpec consists of two or more
@@ -382,8 +459,8 @@ class BaseCommand extends Command
      * more than 255 characters.
      *
      * @access private
-     * 
-     * @param array $metadataAuthor
+     *
+     * @param array<int, mixed> $metadataAuthor
      *
      * @return string
      */
@@ -419,18 +496,18 @@ class BaseCommand extends Command
     }
 
     /**
-     * If owner is not set set but found by metadata, take it or take default library, if nothing found in database then create new owner.
+     * If owner is not set but found by metadata, take it or take default library, if nothing found in database then create new owner.
      *
      * @access private
      *
-     * @param ?string $owner
+     * @param string $owner
      *
      * @return void
      */
-    private function setOwner($owner): void
+    private function setNewOwner(string $owner): void
     {
         if (empty($this->owner)) {
-            // owner is not set set but found by metadata --> take it or take default library
+            // owner is not set but found by metadata --> take it or take default library
             $owner = $owner ? : 'default';
             $this->owner = $this->libraryRepository->findOneBy(['indexName' => $owner]);
             if (empty($this->owner)) {
