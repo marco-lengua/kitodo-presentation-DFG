@@ -28,7 +28,7 @@ use TYPO3\CMS\Core\Type\ContextualFeedbackSeverity;
  */
 class SolrCoreStatus extends AbstractNode
 {
-    public const LANG_PREFIX = 'LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:';
+    private const LANG_PREFIX = 'LLL:EXT:dlf/Resources/Private/Language/locallang_be.xlf:';
 
     /**
      * Shows Solr core status for given 'index_name'
@@ -64,14 +64,14 @@ class SolrCoreStatus extends AbstractNode
                     $uptimeInSeconds = floor($response->getUptime() / 1000);
                     $dateTimeFrom = new \DateTime('@0');
                     $dateTimeTo = new \DateTime("@$uptimeInSeconds");
-                    $uptime = $dateTimeFrom->diff($dateTimeTo)->format('%a ' . Helper::getLanguageService()->sL(self::LANG_PREFIX . 'flash.days') . ', %H:%I:%S');
+                    $uptime = $dateTimeFrom->diff($dateTimeTo)->format('%a ' . Helper::getLanguageService()->sL(self::LANG_PREFIX . 'general.flash.days') . ', %H:%I:%S');
                     $numDocuments = $response->getNumberOfDocuments();
                     $startTime = $response->getStartTime() ? $dateFormatter->format($response->getStartTime()) : 'N/A';
                     $lastModified = $response->getLastModified() ? $dateFormatter->format($response->getLastModified()) : 'N/A';
 
                     // Create flash message.
                     Helper::addMessage(
-                        sprintf(Helper::getLanguageService()->sL(self::LANG_PREFIX . 'flash.coreStatus'), $startTime, $uptime, $lastModified, $numDocuments),
+                        sprintf(Helper::getLanguageService()->sL(self::LANG_PREFIX . 'general.flash.coreStatus'), $startTime, $uptime, $lastModified, $numDocuments),
                         '', // We must not set a title/header, because <h4> isn't allowed in FieldInformation.
                         ContextualFeedbackSeverity::INFO
                     );

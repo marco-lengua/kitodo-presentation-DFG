@@ -21,7 +21,6 @@ use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsExcepti
 use TYPO3\CMS\Core\Resource\StorageRepository;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
-use TYPO3\CMS\Core\Utility\PathUtility;
 
 /**
  * Controller class for plugin 'Toolbox'.
@@ -75,24 +74,12 @@ class ToolboxController extends AbstractController
         if (!empty($this->settings['tools'])) {
 
             $tools = explode(',', $this->settings['tools']);
-
+            $toolsToRender = [];
             foreach ($tools as $tool) {
-                match ($tool) {
-                    'tx_dlf_multiviewaddsourcetool', 'multiviewaddsourcetool' => $this->renderToolByName('renderMultiViewAddSourceTool'),
-                    'tx_dlf_annotationtool', 'annotationtool' => $this->renderToolByName('renderAnnotationTool'),
-                    'tx_dlf_audiovideotool', 'audiovideotool' => $this->renderToolByName('renderAudioVideoTool'),
-                    'tx_dlf_fulltextdownloadtool', 'fulltextdownloadtool' => $this->renderToolByName('renderFulltextDownloadTool'),
-                    'tx_dlf_fulltexttool', 'fulltexttool' => $this->renderToolByName('renderFulltextTool'),
-                    'tx_dlf_imagedownloadtool', 'imagedownloadtool' => $this->renderToolByName('renderImageDownloadTool'),
-                    'tx_dlf_imagemanipulationtool', 'imagemanipulationtool' => $this->renderToolByName('renderImageManipulationTool'),
-                    'tx_dlf_modeldownloadtool', 'modeldownloadtool' => $this->renderToolByName('renderModelDownloadTool'),
-                    'tx_dlf_pdfdownloadtool', 'pdfdownloadtool' => $this->renderToolByName('renderPdfDownloadTool'),
-                    'tx_dlf_scoretool', 'scoretool' => $this->renderToolByName('renderScoreTool'),
-                    'tx_dlf_searchindocumenttool', 'searchindocumenttool' => $this->renderToolByName('renderSearchInDocumentTool'),
-                    'tx_dlf_viewerselectiontool', 'viewerselectiontool' => $this->renderToolByName('renderViewerSelectionTool'),
-                    default => $this->logger->warning('Incorrect tool configuration: "' . $this->settings['tools'] . '". Tool "' . $tool . '" does not exist.')
-                };
+                $this->renderToolByName($tool);
+                $toolsToRender[$tool] = true;
             }
+            $this->view->assign('tools', $toolsToRender);
         }
     }
 
@@ -107,8 +94,15 @@ class ToolboxController extends AbstractController
      */
     private function renderToolByName(string $tool): void
     {
-        $this->$tool();
-        $this->view->assign($tool, true);
+        $functionName = 'render' . ucfirst($tool);
+        if (!method_exists($this, $functionName)) {
+            if ($functionName != 'renderRotationTool' && $functionName != 'renderZoomTool') {
+                // rotation and zoom tool do not need a function, because they only render the buttons, no view arguments are needed
+                $this->logger->warning('Incorrect tool configuration: "' . $this->settings['tools'] . '". Tool "' . $tool . '" does not exist.');
+            }
+            return;
+        }
+        $this->$functionName();
     }
 
     /**
@@ -410,7 +404,7 @@ class ToolboxController extends AbstractController
     private function renderImageManipulationTool(): void
     {
         // Set parent element for initialization.
-        $parentContainer = !empty($this->settings['parentContainer']) ? $this->settings['parentContainer'] : '.tx-dlf-imagemanipulationtool';
+        $parentContainer = !empty($this->settings['parentContainer']) ? $this->settings['parentContainer'] : '.tx-dlf-tools-imagemanipulation';
 
         $this->view->assign('imageManipulation', true);
         $this->view->assign('parentContainer', $parentContainer);
@@ -603,7 +597,7 @@ class ToolboxController extends AbstractController
     {
         if (
             $this->isDocOrFulltextMissingOrEmpty()
-            || (empty($this->settings['solrcore'] && empty($this->settings['solrCoreUid'])))
+            || (empty($this->settings['solrcore']) && empty($this->settings['solrCoreUid']))
         ) {
             // Quit without doing anything if required variables are not set.
             return;
@@ -707,5 +701,31 @@ class ToolboxController extends AbstractController
             }
         }
         return true;
+    }
+
+    /**
+     * Renders the rotation tool (used in template)
+     * @SuppressWarnings(PHPMD.UnusedPrivateMethod)
+     *
+     * @access private
+     *
+     * @return void
+     */
+    private function renderRotationTool(): void
+    {
+        // Empty function, no view arguments needed
+    }
+
+    /**
+     * Renders the zoom tool (used in template)
+     * @SuppressWarnings(PHPMD.UnusedPrivateMethod)
+     *
+     * @access private
+     *
+     * @return void
+     */
+    private function renderZoomTool(): void
+    {
+        // Empty function, no view arguments needed
     }
 }
