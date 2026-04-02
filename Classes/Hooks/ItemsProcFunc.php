@@ -50,7 +50,7 @@ class ItemsProcFunc implements LoggerAwareInterface
     public function toolList(array &$params): void
     {
         $configurationManager = GeneralUtility::makeInstance(ConfigurationManager::class);
-        $options = $configurationManager->getLocalConfigurationValueByPath('SC_OPTIONS');
+        $options = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'];
         foreach ($options['dlf/Classes/Plugin/Toolbox.php']['tools'] as $class => $label) {
             $params['items'][] = [Helper::getLanguageService()->sL($label), $class];
         }
