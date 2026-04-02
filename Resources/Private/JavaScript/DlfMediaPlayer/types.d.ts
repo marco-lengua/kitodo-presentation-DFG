@@ -11,7 +11,7 @@ interface HTMLElementTagNameMap {
   "dlf-waveform": import("DlfMediaPlayer/components/waveform").WaveForm;
 }
 
-declare module "shaka-player/dist/shaka-player.ui" {
+declare module 'shaka-player/dist/shaka-player.ui.d' {
   export = shaka;
 }
 
@@ -236,10 +236,10 @@ namespace dlf {
       getThumb(position: number): Promise<ThumbnailOnTrack | null>;
     }
 
-    // dataset.tool Type
+    // dataset.toolsAudiovideo Type
     declare global {
         interface DOMStringMap {
-            tool?: ToolboxTool;
+            toolsAudiovideo?: ToolboxTool;
         }
     }
 
@@ -252,7 +252,7 @@ namespace dlf {
 
     // Mapping-Types
     interface ToolboxIdMap {
-        [key: string]: string;
+        [tool: string]: string;
     }
 
     type ToolboxIdMapStrict = Partial<Record<ToolboxTool, string>>;
