@@ -64,34 +64,19 @@ class DocumentTypeFunctionProvider implements ExpressionFunctionProviderInterfac
     protected DocumentRepository $documentRepository;
 
     /**
-     * @param DocumentRepository $documentRepository
-     */
-    public function injectDocumentRepository(DocumentRepository $documentRepository): void
-    {
-        $this->documentRepository = $documentRepository;
-    }
-    /**
      * Initialize the extbase repositories
      *
      * @access protected
      *
      * @param int $storagePid The storage pid
      *
-     * @param int $pid the page id
-     *
      * @return void
      */
-    protected function initializeRepositories(int $storagePid, int $pid): void
+    protected function initializeRepositories(int $storagePid): void
     {
-        $configurationManager = GeneralUtility::makeInstance(ConfigurationManagerInterface::class);
-        $GLOBALS['TYPO3_REQUEST'] = $GLOBALS['TYPO3_REQUEST']->withAttribute(
-            'frontend.typoscript',
-            TypoScriptHelper::getFrontendTyposcript($pid)
-        );
-        $frameworkConfiguration = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK);
-        $frameworkConfiguration['persistence']['storagePid'] = MathUtility::forceIntegerInRange($storagePid, 0);
-        $configurationManager->setConfiguration($frameworkConfiguration);
         $this->documentRepository = GeneralUtility::makeInstance(DocumentRepository::class);
+        $this->documentRepository->useStoragePid(MathUtility::forceIntegerInRange($storagePid, 0));
+
     }
 
     /**
@@ -115,42 +100,65 @@ class DocumentTypeFunctionProvider implements ExpressionFunctionProviderInterfac
 
                 $type = 'undefined';
 
-                // It happens that $queryParams is an empty array or does not contain a key 'tx_dlf'
-                // in case of other contexts. In this case we have to return here to avoid log messages.
-                if (empty($queryParams) || !isset($queryParams['tx_dlf'])) {
-                    return $type;
-                }
-
                 // object type if model parameter is not empty so we assume that it is a 3d object
-                if (!empty($queryParams['tx_dlf']['model'])) {
+                if (isset($queryParams['tx_dlf']) && !empty($queryParams['tx_dlf']['model'])) {
                     return 'object';
                 }
 
-                // It happens that $queryParams does not contain a key 'tx_dlf[id]'
-                if (!isset($queryParams['tx_dlf']['id'])) {
+                $doc = $this->loadDocumentFromArguments($arguments, $storagePid);
+                if ($doc === null) {
                     return $type;
                 }
 
-                $pid = $arguments['page']['pid'] ?? $arguments['page'];
-
-                // Load document with current plugin parameters.
-                $this->loadDocument($queryParams['tx_dlf'], $storagePid, $pid);
-                if (!isset($this->document) || $this->document->getCurrentDocument() === null) {
-                    return $type;
-                }
-
-                // Set PID for metadata definitions.
-                $this->document->getCurrentDocument()->configPid = $storagePid;
-
-                $metadata = $this->document->getCurrentDocument()->getToplevelMetadata();
+                $metadata = $doc->getToplevelMetadata();
 
                 if (!empty($metadata['type'][0])
                     && !$this->isIiifManifestWithNewspaperRelatedType($metadata['type'][0])) {
                     $type = $metadata['type'][0];
                 }
+
                 return $type;
             }
         );
+    }
+
+    /**
+     * Load and return the AbstractDocument from request arguments
+     *
+     * @access protected
+     *
+     * @param mixed[] $arguments The request arguments
+     * @param int $storagePid Storage Pid
+     *
+     * @return AbstractDocument|null
+     */
+    protected function loadDocumentFromArguments(array $arguments, int $storagePid): ?AbstractDocument
+    {
+        /** @var RequestWrapper $requestWrapper */
+        $requestWrapper = $arguments['request'];
+        $queryParams = $requestWrapper ? $requestWrapper->getQueryParams() : [];
+
+        // It happens that $queryParams is an empty array or does not contain a key 'tx_dlf'
+        // in case of other contexts. In this case we have to return here to avoid log messages.
+        if (empty($queryParams) || !isset($queryParams['tx_dlf'])) {
+            return null;
+        }
+
+        // It happens that $queryParams does not contain a key 'tx_dlf[id]'
+        if (!isset($queryParams['tx_dlf']['id'])) {
+            return null;
+        }
+
+        // Load document with current plugin parameters.
+        $this->loadDocument($queryParams['tx_dlf'], $storagePid);
+        if (!isset($this->document) || $this->document->getCurrentDocument() === null) {
+            return null;
+        }
+
+        // Set PID for metadata definitions.
+        $this->document->getCurrentDocument()->configPid = $storagePid;
+
+        return $this->document->getCurrentDocument();
     }
 
     /**
@@ -160,23 +168,19 @@ class DocumentTypeFunctionProvider implements ExpressionFunctionProviderInterfac
      *
      * @param mixed[] $requestData The request data
      * @param int $storagePid Storage Pid
-     * @param int $pid the page id
      *
      * @return void
      */
-    protected function loadDocument(array $requestData, int $storagePid, int $pid): void
+    protected function loadDocument(array $requestData, int $storagePid): void
     {
         // Try to get document format from database
         if (!empty($requestData['id'])) {
-            $this->initializeRepositories($storagePid, $pid);
+            $this->initializeRepositories($storagePid);
             $doc = null;
             $this->document = null;
             if (MathUtility::canBeInterpretedAsInteger($requestData['id'])) {
                 // find document from repository by uid
-                $this->document = $this->documentRepository->findOneByIdAndSettings(
-                    (int) $requestData['id'],
-                    ['storagePid' => $storagePid]
-                );
+                $this->document = $this->documentRepository->findByUid((int) $requestData['id']);
                 if ($this->document) {
                     $doc = AbstractDocument::getInstance($this->document->getLocation(), ['storagePid' => $storagePid]);
                 } else {

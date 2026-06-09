@@ -13,14 +13,15 @@
 namespace Kitodo\Dlf\Common;
 
 use Kitodo\Dlf\Common\Solr\Solr;
+use Kitodo\Dlf\Domain\Model\Metadata;
 use Kitodo\Dlf\Domain\Repository\DocumentRepository;
+use Kitodo\Dlf\Domain\Repository\MetadataRepository;
 use Kitodo\Dlf\Domain\Model\Document;
 use Kitodo\Dlf\Validation\DocumentValidator;
 use Solarium\QueryType\Update\Query\Document as QueryDocument;
 use Solarium\QueryType\Update\Query\Query;
 use Symfony\Component\Console\Input\InputInterface;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
-use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Type\ContextualFeedbackSeverity;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
@@ -163,17 +164,17 @@ class Indexer
                     if ($success) {
                         self::addMessage(
                             sprintf(
-                                Helper::getLanguageService()->sL(self::LANG_PREFIX . 'flash.documentIndexed'),
+                                Helper::getLanguageService()->sL(self::LANG_PREFIX . 'general.flash.documentIndexed'),
                                 $document->getTitle(),
                                 $document->getUid()
                             ),
-                            'flash.done',
+                            'general.flash.done',
                             ContextualFeedbackSeverity::OK
                         );
                     } else {
                         self::addErrorMessage(
                             sprintf(
-                                Helper::getLanguageService()->sL(self::LANG_PREFIX . 'flash.documentNotIndexed'),
+                                Helper::getLanguageService()->sL(self::LANG_PREFIX . 'general.flash.documentNotIndexed'),
                                 $document->getTitle(),
                                 $document->getUid()
                             )
@@ -188,8 +189,8 @@ class Indexer
         } else {
             if (!(Environment::isCli())) {
                 self::addMessage(
-                    Helper::getLanguageService()->sL(self::LANG_PREFIX . 'flash.solrNoConnection'),
-                    'flash.warning',
+                    Helper::getLanguageService()->sL(self::LANG_PREFIX . 'general.flash.solrNoConnection'),
+                    'general.flash.warning',
                     ContextualFeedbackSeverity::WARNING
                 );
             }
@@ -221,8 +222,8 @@ class Indexer
             } catch (\Exception $e) {
                 if (!(Environment::isCli())) {
                     Helper::addMessage(
-                        Helper::getLanguageService()->sL(self::LANG_PREFIX . 'flash.solrException') . ' ' . htmlspecialchars($e->getMessage()),
-                        Helper::getLanguageService()->sL(self::LANG_PREFIX . 'flash.error'),
+                        Helper::getLanguageService()->sL(self::LANG_PREFIX . 'general.flash.solrException') . ' ' . htmlspecialchars($e->getMessage()),
+                        Helper::getLanguageService()->sL(self::LANG_PREFIX . 'general.flash.error'),
                         ContextualFeedbackSeverity::ERROR,
                         true,
                         'core.template.flashMessages'
@@ -281,53 +282,36 @@ class Indexer
     protected static function loadIndexConf(int $pid): void
     {
         if (!self::$fieldsLoaded) {
-            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-                ->getQueryBuilderForTable('tx_dlf_metadata');
+            /** @var MetadataRepository $metadataRepository */
+            $metadataRepository = GeneralUtility::makeInstance(MetadataRepository::class);
+            $metadataRepository->useStoragePid($pid);
+            $metadata = $metadataRepository->findAll();
 
-            // Get the metadata indexing options.
-            $result = $queryBuilder
-                ->select(
-                    'index_name',
-                    'index_tokenized',
-                    'index_stored',
-                    'index_indexed',
-                    'is_sortable',
-                    'is_facet',
-                    'is_listed',
-                    'index_autocomplete',
-                    'index_boost'
-                )
-                ->from('tx_dlf_metadata')
-                ->where(
-                    $queryBuilder->expr()->eq('pid', $pid),
-                    Helper::whereExpression('tx_dlf_metadata')
-                )
-                ->executeQuery();
-
-            while ($indexing = $result->fetchAssociative()) {
-                if ($indexing['index_tokenized']) {
-                    self::$fields['tokenized'][] = $indexing['index_name'];
+            /** @var Metadata $indexing */
+            foreach ($metadata as $indexing) {
+                if ($indexing->getIndexTokenized()) {
+                    self::$fields['tokenized'][] = $indexing->getIndexName();
                 }
                 if (
-                    $indexing['index_stored']
-                    || $indexing['is_listed']
+                    $indexing->getIndexStored()
+                    || $indexing->getIsListed()
                 ) {
-                    self::$fields['stored'][] = $indexing['index_name'];
+                    self::$fields['stored'][] = $indexing->getIndexName();
                 }
                 if (
-                    $indexing['index_indexed']
-                    || $indexing['index_autocomplete']
+                    $indexing->getIndexIndexed()
+                    || $indexing->getIndexAutocomplete()
                 ) {
-                    self::$fields['indexed'][] = $indexing['index_name'];
+                    self::$fields['indexed'][] = $indexing->getIndexName();
                 }
-                if ($indexing['is_sortable']) {
-                    self::$fields['sortables'][] = $indexing['index_name'];
+                if ($indexing->getIsSortable()) {
+                    self::$fields['sortables'][] = $indexing->getIndexName();
                 }
-                if ($indexing['is_facet']) {
-                    self::$fields['facets'][] = $indexing['index_name'];
+                if ($indexing->getIsFacet()) {
+                    self::$fields['facets'][] = $indexing->getIndexName();
                 }
-                if ($indexing['index_autocomplete']) {
-                    self::$fields['autocomplete'][] = $indexing['index_name'];
+                if ($indexing->getIndexAutocomplete()) {
+                    self::$fields['autocomplete'][] = $indexing->getIndexName();
                 }
             }
             self::$fieldsLoaded = true;
@@ -908,7 +892,7 @@ class Indexer
     private static function handleException(string $errorMessage): void
     {
         if (!(Environment::isCli())) {
-            self::addErrorMessage(Helper::getLanguageService()->sL(self::LANG_PREFIX . 'flash.solrException') . '<br />' . htmlspecialchars($errorMessage));
+            self::addErrorMessage(Helper::getLanguageService()->sL(self::LANG_PREFIX . 'general.flash.solrException') . '<br />' . htmlspecialchars($errorMessage));
         }
         Helper::error('Apache Solr threw exception: "' . $errorMessage . '"');
     }
@@ -928,7 +912,7 @@ class Indexer
     {
         self::addMessage(
             $message,
-            'flash.error',
+            'general.flash.error',
             ContextualFeedbackSeverity::ERROR
         );
     }

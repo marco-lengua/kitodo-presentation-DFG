@@ -33,7 +33,11 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
     /** @type {MetadataArray} */
     this.metadata = {};
 
-    /** @private @type {Keybinding<KeyboardScope, keyof SlubMediaPlayer['actions']>[]} */
+    /**
+     * @type {Keybinding<KeyboardScope, keyof SlubMediaPlayer['actions']>[]}
+     *
+     * @private
+     */
     this.keybindings = /** @type {any} */(keybindings);
 
     /** @private */
@@ -45,16 +49,28 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
       onCloseModal: this.onCloseModal.bind(this),
     };
 
-    /** @private @type {ChapterLinkElement[]} */
+    /**
+     * @type {ChapterLinkElement[]}
+     *
+     * @private
+     */
     this.chapterLinks = [];
 
-    /** @private @type {HTMLSelectElement | null} */
+    /**
+     * @type {HTMLSelectElement | null}
+     *
+     * @private
+     */
     this.pageSelect = null;
 
     /** @private */
     this.modals = null;
 
-    /** @private @type {Partial<AppConstantsConfig>} */
+    /**
+     * @type {Partial<AppConstantsConfig>}
+     *
+     * @private
+     */
     this.appConstants = {};
   }
 
@@ -234,9 +250,10 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
    * Extracts chapter to jump to when clicking on {@link link},
    * or `null` if none could be determined.
    *
-   * @private
    * @param {HTMLAnchorElement} link
    * @returns {ChapterLink | null}
+   *
+   * @private
    */
   getChapterLink(link) {
     // Attempt: Parse data-timecode attribute
@@ -279,7 +296,7 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
   onDomContentLoaded() {
     super.onDomContentLoaded();
 
-    document.querySelectorAll("a[data-timecode], .tx-dlf-tableofcontents a, .tx-dlf-toc a").forEach(el => {
+    document.querySelectorAll("a[data-timecode], .tx-dlf-tableofcontents a").forEach(el => {
       const link = /** @type {HTMLAnchorElement} */(el);
       const videoLink = this.getChapterLink(link);
       if (videoLink !== null) {
@@ -339,8 +356,9 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
   }
 
   /**
-   * @private
    * @returns {KeyboardScope}
+   *
+   * @private
    */
   getKeyboardScope() {
     if (this.modals?.hasOpen()) {
@@ -358,8 +376,9 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
   }
 
   /**
-   * @private
    * @param {KeyboardEvent} e
+   *
+   * @private
    */
   onKeyDown(e) {
     if (!this.hasVideo) {
@@ -370,8 +389,9 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
   }
 
   /**
-   * @private
    * @param {KeyboardEvent} e
+   *
+   * @private
    */
   onKeyUp(e) {
     // Stopping propagation is a hack against the keyup handler in
@@ -389,9 +409,10 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
   }
 
   /**
-   * @private
    * @param {KeyboardEvent} e
    * @param {KeyEventMode} mode
+   *
+   * @private
    */
   handleKey(e, mode) {
     const curKbScope = this.getKeyboardScope();
@@ -423,8 +444,9 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
   }
 
   /**
-   * @private
    * @param {MouseEvent} e
+   *
+   * @private
    */
   onClickChapterLink(e) {
     // Use `currentTarget` to get the <a> element to which the handler has
@@ -467,13 +489,14 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
   }
 
   /**
-   * @private
    * @param {ValueOf<AppModals>} modal
+   *
+   * @private
    */
   onCloseModal(modal) {
     if ('$startAtVariants' in modal) {
       // Removes the hidden class of the 'begin' element if it was called from the MarkerTable
-      setElementClass(modal.$startAtVariants['begin'].$container, 'bookmark-markertable-hidden', false);
+      setElementClass(modal.$startAtVariants.begin.$container, 'bookmark-markertable-hidden', false);
     }
 
     this.resumeOn(modal);
@@ -517,7 +540,7 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
 
     // If fromMarkerTable is true, hide the ['begin'] element
     if (fromMarkerTable === true) {
-      setElementClass(modal.$startAtVariants['begin'].$container, 'bookmark-markertable-hidden', true);
+      setElementClass(modal.$startAtVariants.begin.$container, 'bookmark-markertable-hidden', true);
     }
 
     this.openModal(modal, /* pause= */ true);
@@ -552,9 +575,10 @@ export default class SlubMediaPlayer extends DlfMediaPlayer {
   }
 
   /**
-   * @private
    * @param {ValueOf<AppModals>=} modal
    * @param {boolean} pause
+   *
+   * @private
    */
   openModal(modal, pause = false) {
     if (modal == null) {
