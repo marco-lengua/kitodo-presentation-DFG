@@ -24,7 +24,6 @@ use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
-use TYPO3\CMS\Extbase\Persistence\Repository;
 use TYPO3\CMS\Extbase\Persistence\QueryInterface;
 use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
 
@@ -39,9 +38,9 @@ use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
  * @method Document|null findByUid(int|null $uid) Get a document by its UID
  * @method Document|null findOneBy(array $criteria) Get a document by criteria
  *
- * @extends Repository<Document>
+ * @extends AbstractRepository<Document>
  */
-class DocumentRepository extends Repository
+class DocumentRepository extends AbstractRepository
 {
     /**
      * @access protected
@@ -73,7 +72,7 @@ class DocumentRepository extends Repository
 
         if (isset($parameters['id']) && MathUtility::canBeInterpretedAsInteger($parameters['id'])) {
 
-            $document = $this->findOneByIdAndSettings($parameters['id']);
+            $document = $this->findByUid($parameters['id']);
 
         } elseif (isset($parameters['recordId'])) {
 
@@ -120,6 +119,8 @@ class DocumentRepository extends Repository
         $query->setOrderings(['tstamp' => QueryInterface::ORDER_ASCENDING]);
         $query->setLimit(1);
 
+        $this->debugQuery($query);
+
         /** @var Document $document */
         $document = $query->execute()->getFirst();
         return $document;
@@ -146,24 +147,9 @@ class DocumentRepository extends Repository
             ]
         );
 
+        $this->debugQuery($query);
+
         return $query->execute();
-    }
-
-    /**
-     * Finds all documents for the given settings
-     *
-     * @access public
-     *
-     * @param int $uid
-     * @param array<string, mixed> $settings
-     *
-     * @return Document|null
-     */
-    public function findOneByIdAndSettings(int $uid, array $settings = []): ?Document
-    {
-        $settings['documentSets'] = $uid;
-
-        return $this->findDocumentsBySettings($settings)->getFirst(); // @phpstan-ignore-line
     }
 
     /**
@@ -194,6 +180,8 @@ class DocumentRepository extends Repository
                 $query->logicalAnd(...$constraints)
             );
         }
+
+        $this->debugQuery($query);
 
         return $query->execute();
     }
@@ -233,6 +221,8 @@ class DocumentRepository extends Repository
             $query->setLimit($limit);
             $query->setOffset($offset);
         }
+
+        $this->debugQuery($query);
 
         return $query->execute();
     }
@@ -288,6 +278,8 @@ class DocumentRepository extends Repository
                 ->executeQuery()
                 ->fetchFirstColumn();
 
+            $this->debugQueryBuilder($queryBuilder);
+
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
                 ->getQueryBuilderForTable('tx_dlf_documents');
             $subQueryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
@@ -332,6 +324,9 @@ class DocumentRepository extends Repository
                 )
                 ->executeQuery()
                 ->fetchFirstColumn();
+
+            $this->debugQueryBuilder($queryBuilder);
+            $this->debugQueryBuilder($subQueryBuilder);
         } else {
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
                 ->getQueryBuilderForTable('tx_dlf_documents');
@@ -371,6 +366,8 @@ class DocumentRepository extends Repository
                 )
                 ->executeQuery()
                 ->fetchFirstColumn();
+
+            $this->debugQueryBuilder($queryBuilder);
         }
 
         return ['titles' => $countTitles[0] ?? 0, 'volumes' => $countVolumes[0] ?? 0];
@@ -398,7 +395,7 @@ class DocumentRepository extends Repository
             $excludeOtherWhere = 'tx_dlf_documents.pid=' . (int) $settings['storagePid'];
         }
         // Check if there are any metadata to suggest.
-        return $queryBuilder
+        $queryBuilder
             ->select(
                 'tx_dlf_documents.uid AS uid',
                 'tx_dlf_documents.title AS title',
@@ -425,8 +422,11 @@ class DocumentRepository extends Repository
             )
             ->getConcreteQueryBuilder()
             ->orderBy('cast(volume_sorting as UNSIGNED)', 'asc')
-            ->addOrderBy('tx_dlf_documents.mets_orderlabel')
-            ->executeQuery();
+            ->addOrderBy('tx_dlf_documents.mets_orderlabel');
+
+        $this->debugQueryBuilder($queryBuilder);
+
+        return $queryBuilder->executeQuery();
     }
 
     /**
@@ -441,35 +441,29 @@ class DocumentRepository extends Repository
      */
     public function getOaiRecord(array $settings, array $parameters): array|false
     {
-        $where = '';
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable('tx_dlf_documents');
 
-        if (!$settings['show_userdefined']) {
-            $where .= 'AND tx_dlf_collections.fe_cruser_id=0 ';
+        $select = 'tx_dlf_documents.crdate AS crdate, tx_dlf_documents.tstamp AS tstamp, tx_dlf_documents.deleted AS deleted, tx_dlf_documents.hidden AS hidden, tx_dlf_documents.record_id AS record_id, tx_dlf_documents.document_format AS document_format, tx_dlf_documents.purl AS purl, tx_dlf_documents.urn AS urn, tx_dlf_documents.location AS location, GROUP_CONCAT(DISTINCT tx_dlf_collections_join.oai_name ORDER BY tx_dlf_collections_join.oai_name SEPARATOR " ") AS collections';
+
+        $qb = $queryBuilder
+            ->selectLiteral($select)
+            ->from('tx_dlf_documents')
+            ->innerJoin('tx_dlf_documents', 'tx_dlf_relations', 'tx_dlf_relations_join', 'tx_dlf_relations_join.uid_local = tx_dlf_documents.uid')
+            ->innerJoin('tx_dlf_relations_join', 'tx_dlf_collections', 'tx_dlf_collections_join', 'tx_dlf_collections_join.uid = tx_dlf_relations_join.uid_foreign')
+            ->where($queryBuilder->expr()->eq('tx_dlf_documents.record_id', $queryBuilder->createNamedParameter($parameters['identifier'])))
+            ->andWhere($queryBuilder->expr()->eq('tx_dlf_relations_join.ident', $queryBuilder->createNamedParameter('docs_colls')))
+            ->groupBy('tx_dlf_documents.uid');
+
+        if (empty($settings['showUserDefined'])) {
+            $qb->andWhere($queryBuilder->expr()->eq('tx_dlf_collections_join.fe_cruser_id', 0));
         }
 
-        $connection = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getConnectionForTable('tx_dlf_documents');
+        $qb->getConcreteQueryBuilder()->setMaxResults(1);
 
-        $sql = 'SELECT `tx_dlf_documents`.*, GROUP_CONCAT(DISTINCT `tx_dlf_collections`.`oai_name` ORDER BY `tx_dlf_collections`.`oai_name` SEPARATOR " ") AS `collections` ' .
-            'FROM `tx_dlf_documents` ' .
-            'INNER JOIN `tx_dlf_relations` ON `tx_dlf_relations`.`uid_local` = `tx_dlf_documents`.`uid` ' .
-            'INNER JOIN `tx_dlf_collections` ON `tx_dlf_collections`.`uid` = `tx_dlf_relations`.`uid_foreign` ' .
-            'WHERE `tx_dlf_documents`.`record_id` = ? ' .
-            'AND `tx_dlf_relations`.`ident`="docs_colls" ' .
-            $where;
+        $this->debugQueryBuilder($queryBuilder);
 
-        $values = [
-            $parameters['identifier']
-        ];
-
-        $types = [
-            Connection::PARAM_STR
-        ];
-
-        // Create a prepared statement for the passed SQL query, bind the given params with their binding types and execute the query
-        $statement = $connection->executeQuery($sql, $values, $types);
-
-        return $statement->fetchAssociative();
+        return $qb->executeQuery()->fetchAssociative();
     }
 
     /**
@@ -479,32 +473,28 @@ class DocumentRepository extends Repository
      *
      * @param mixed[] $documentsToProcess
      *
-     * @return Result The found document objects
+     * @return list<array<string,mixed>> The found document objects as associative arrays
      */
-    public function getOaiDocumentList(array $documentsToProcess): Result
+    public function getOaiDocumentList(array $documentsToProcess): array
     {
-        $connection = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getConnectionForTable('tx_dlf_documents');
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable('tx_dlf_documents');
 
-        $sql = 'SELECT `tx_dlf_documents`.*, GROUP_CONCAT(DISTINCT `tx_dlf_collections`.`oai_name` ORDER BY `tx_dlf_collections`.`oai_name` SEPARATOR " ") AS `collections` ' .
-            'FROM `tx_dlf_documents` ' .
-            'INNER JOIN `tx_dlf_relations` ON `tx_dlf_relations`.`uid_local` = `tx_dlf_documents`.`uid` ' .
-            'INNER JOIN `tx_dlf_collections` ON `tx_dlf_collections`.`uid` = `tx_dlf_relations`.`uid_foreign` ' .
-            'WHERE `tx_dlf_documents`.`uid` IN ( ? ) ' .
-            'AND `tx_dlf_relations`.`ident`="docs_colls" ' .
-            'AND ' . Helper::whereExpression('tx_dlf_collections') . ' ' .
-            'GROUP BY `tx_dlf_documents`.`uid` ';
+        $select = 'tx_dlf_documents.crdate AS crdate, tx_dlf_documents.tstamp AS tstamp, tx_dlf_documents.deleted AS deleted, tx_dlf_documents.hidden AS hidden, tx_dlf_documents.record_id AS record_id, tx_dlf_documents.document_format AS document_format, tx_dlf_documents.purl AS purl, tx_dlf_documents.urn AS urn, tx_dlf_documents.location AS location, GROUP_CONCAT(DISTINCT tx_dlf_collections_join.oai_name ORDER BY tx_dlf_collections_join.oai_name SEPARATOR " ") AS collections';
 
-        $values = [
-            $documentsToProcess,
-        ];
+        $qb = $queryBuilder
+            ->selectLiteral($select)
+            ->from('tx_dlf_documents')
+            ->innerJoin('tx_dlf_documents', 'tx_dlf_relations', 'tx_dlf_relations_join', 'tx_dlf_relations_join.uid_local = tx_dlf_documents.uid')
+            ->innerJoin('tx_dlf_relations_join', 'tx_dlf_collections', 'tx_dlf_collections_join', 'tx_dlf_collections_join.uid = tx_dlf_relations_join.uid_foreign')
+            ->where($queryBuilder->expr()->in('tx_dlf_documents.uid', $queryBuilder->createNamedParameter($documentsToProcess, Connection::PARAM_INT_ARRAY)))
+            ->andWhere($queryBuilder->expr()->eq('tx_dlf_relations_join.ident', $queryBuilder->createNamedParameter('docs_colls')))
+            ->andWhere($queryBuilder->expr()->eq('tx_dlf_collections_join.deleted', 0))
+            ->groupBy('tx_dlf_documents.uid');
 
-        $types = [
-            Connection::PARAM_INT_ARRAY,
-        ];
+        $this->debugQueryBuilder($queryBuilder);
 
-        // Create a prepared statement for the passed SQL query, bind the given params with their binding types and execute the query
-        return $connection->executeQuery($sql, $values, $types);
+        return $qb->executeQuery()->fetchAllAssociative();
     }
 
     /**
@@ -519,42 +509,39 @@ class DocumentRepository extends Repository
      */
     public function findAllByUids(array $uids, bool $checkPartof = false): array
     {
-        // get all documents from db we are talking about
-        $connectionPool = GeneralUtility::makeInstance(ConnectionPool::class);
-        $queryBuilder = $connectionPool->getQueryBuilderForTable('tx_dlf_documents');
-        // Fetch document info for UIDs in $documentSet from DB
-        $exprDocumentMatchesUid = $queryBuilder->expr()->in('uid', $uids);
+        $query = $this->createQuery();
+
+        $exprDocumentMatchesUid = $query->in('uid', $uids);
         if ($checkPartof) {
-            $exprDocumentMatchesUid = $queryBuilder->expr()->or(
-                $exprDocumentMatchesUid,
-                $queryBuilder->expr()->in('partof', $uids)
+            $exprDocumentMatchesUid = $query->logicalOr(
+                $query->in('uid', $uids),
+                $query->in('partof', $uids)
             );
         }
-        $kitodoDocuments = $queryBuilder
-            ->select(
-                'uid',
-                'title',
-                'structure',
-                'thumbnail',
-                'volume_sorting AS volumeSorting',
-                'mets_orderlabel AS metsOrderlabel',
-                'partof AS partOf'
-            )
-            ->from('tx_dlf_documents')
-            ->where(
-                $queryBuilder->expr()->in('pid', $this->settings['storagePid']),
-                $exprDocumentMatchesUid
-            )
-            ->getConcreteQueryBuilder()
-            ->orderBy('cast(volume_sorting as UNSIGNED)', 'asc')
-            ->addOrderBy('mets_orderlabel', 'asc')
-            ->executeQuery();
+
+        $query->matching($exprDocumentMatchesUid);
+        $query->setOrderings([
+            'volumeSorting' => QueryInterface::ORDER_ASCENDING,
+            'metsOrderlabel' => QueryInterface::ORDER_ASCENDING
+        ]);
+
+        $result = $query->execute();
 
         $allDocuments = [];
         $documentStructures = Helper::getDocumentStructures($this->settings['storagePid']);
-        // Process documents in a usable array structure
-        while ($resArray = $kitodoDocuments->fetchAssociative()) {
-            $resArray['structure'] = $documentStructures[$resArray['structure']] ?? null;
+
+        /** @var Document $doc */
+        foreach ($result as $doc) {
+            $resArray = [
+                'uid' => $doc->getUid(),
+                'title' => $doc->getTitle(),
+                'structure' => $documentStructures[$doc->getStructure()?->getUid()] ?? null,
+                'thumbnail' => $doc->getThumbnail(),
+                'volumeSorting' => $doc->getVolumeSorting(),
+                'metsOrderlabel' => $doc->getMetsOrderlabel(),
+                'partOf' => $doc->getPartof()
+            ];
+
             $allDocuments[$resArray['uid']] = $resArray;
         }
 
@@ -696,25 +683,23 @@ class DocumentRepository extends Repository
             if ($parentId) {
                 $currentVolume = $currentDocument->getVolumeSorting();
 
-                $connectionPool = GeneralUtility::makeInstance(ConnectionPool::class);
-                $queryBuilder = $connectionPool->getQueryBuilderForTable('tx_dlf_documents');
-
-                // Grab previous volume
-                $prevDocument = $queryBuilder
-                    ->select(
-                        'uid'
+                $query = $this->createQuery();
+                $query->matching(
+                    $query->logicalAnd(
+                        $query->equals('partof', $parentId),
+                        $query->lessThan('volumeSorting', $currentVolume)
                     )
-                    ->from('tx_dlf_documents')
-                    ->where(
-                        $queryBuilder->expr()->eq('partof', $parentId),
-                        'volume_sorting < \'' . $currentVolume . '\''
-                    )
-                    ->addOrderBy('volume_sorting', 'desc')
-                    ->executeQuery()
-                    ->fetchAssociative();
+                );
+                $query->setOrderings(['volumeSorting' => QueryInterface::ORDER_DESCENDING]);
+                $query->setLimit(1);
 
-                if (!empty($prevDocument)) {
-                    return $prevDocument['uid'];
+                $this->debugQuery($query);
+
+                /** @var Document|null $prevDocument */
+                $prevDocument = $query->execute()->getFirst();
+
+                if ($prevDocument !== null) {
+                    return $prevDocument->getUid();
                 }
 
                 $previousDocumentId = $this->getPreviousDocumentUid($parentId);
@@ -746,25 +731,23 @@ class DocumentRepository extends Repository
             if ($parentId) {
                 $currentVolume = $currentDocument->getVolumeSorting();
 
-                $connectionPool = GeneralUtility::makeInstance(ConnectionPool::class);
-                $queryBuilder = $connectionPool->getQueryBuilderForTable('tx_dlf_documents');
-
-                // Grab next volume
-                $nextDocument = $queryBuilder
-                    ->select(
-                        'uid'
+                $query = $this->createQuery();
+                $query->matching(
+                    $query->logicalAnd(
+                        $query->equals('partof', $parentId),
+                        $query->greaterThan('volumeSorting', $currentVolume)
                     )
-                    ->from('tx_dlf_documents')
-                    ->where(
-                        $queryBuilder->expr()->eq('partof', $parentId),
-                        'volume_sorting > \'' . $currentVolume . '\''
-                    )
-                    ->addOrderBy('volume_sorting', 'asc')
-                    ->executeQuery()
-                    ->fetchAssociative();
+                );
+                $query->setOrderings(['volumeSorting' => QueryInterface::ORDER_ASCENDING]);
+                $query->setLimit(1);
 
-                if (!empty($nextDocument)) {
-                    return $nextDocument['uid'];
+                $this->debugQuery($query);
+
+                /** @var Document|null $nextDocument */
+                $nextDocument = $query->execute()->getFirst();
+
+                if ($nextDocument !== null) {
+                    return $nextDocument->getUid();
                 }
 
                 $nextDocumentId = $this->getNextDocumentUid($parentId);
@@ -788,26 +771,19 @@ class DocumentRepository extends Repository
      */
     public function getFirstChild(int $uid): int
     {
-        $connectionPool = GeneralUtility::makeInstance(ConnectionPool::class);
-        $queryBuilder = $connectionPool->getQueryBuilderForTable('tx_dlf_documents');
+        $query = $this->createChildQuery($uid);
+        $query->setOrderings(['volumeSorting' => QueryInterface::ORDER_ASCENDING]);
 
-        $child = $queryBuilder
-            ->select(
-                'uid'
-            )
-            ->from('tx_dlf_documents')
-            ->where(
-                $queryBuilder->expr()->eq('partof', $uid)
-            )
-            ->addOrderBy('volume_sorting', 'asc')
-            ->executeQuery()
-            ->fetchAssociative();
+        $this->debugQuery($query);
 
-        if (empty($child['uid'])) {
+        /** @var Document|null $child */
+        $child = $query->execute()->getFirst();
+
+        if ($child === null) {
             return $uid;
         }
 
-        return $this->getFirstChild($child['uid']);
+        return $this->getFirstChild($child->getUid());
     }
 
     /**
@@ -821,25 +797,34 @@ class DocumentRepository extends Repository
      */
     public function getLastChild(int $uid): int
     {
-        $connectionPool = GeneralUtility::makeInstance(ConnectionPool::class);
-        $queryBuilder = $connectionPool->getQueryBuilderForTable('tx_dlf_documents');
+        $query = $this->createChildQuery($uid);
+        $query->setOrderings(['volumeSorting' => QueryInterface::ORDER_DESCENDING]);
 
-        $child = $queryBuilder
-            ->select(
-                'uid'
-            )
-            ->from('tx_dlf_documents')
-            ->where(
-                $queryBuilder->expr()->eq('partof', $uid)
-            )
-            ->addOrderBy('volume_sorting', 'desc')
-            ->executeQuery()
-            ->fetchAssociative();
+        $this->debugQuery($query);
 
-        if (empty($child['uid'])) {
+        /** @var Document|null $child */
+        $child = $query->execute()->getFirst();
+        if ($child === null) {
             return $uid;
         }
 
-        return $this->getFirstChild($child['uid']);
+        return $this->getFirstChild($child->getUid());
+    }
+
+    /**
+     * Create child query.
+     *
+     * @access private
+     *
+     * @param int $uid
+     *
+     * @return QueryInterface<Document>
+     */
+    private function createChildQuery(int $uid): QueryInterface
+    {
+        $query = $this->createQuery();
+        $query->matching($query->equals('partof', $uid));
+        $query->setLimit(1);
+        return $query;
     }
 }

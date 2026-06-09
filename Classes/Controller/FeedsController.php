@@ -66,6 +66,8 @@ class FeedsController extends AbstractController
         // access to GET parameter tx_dlf_feeds['collection']
         $requestData = $this->request->getArguments();
 
+        $this->libraryRepository->useStoragePid($this->settings['storagePid']);
+
         // get library information
         /** @var \Kitodo\Dlf\Domain\Model\Library|null $library */
         $library = $this->libraryRepository->findByUid($this->settings['library']);
@@ -105,17 +107,17 @@ class FeedsController extends AbstractController
                 }
                 // Set default title if empty.
                 if (empty($title)) {
-                    $title = LocalizationUtility::translate('noTitle', 'dlf') ?: '';
+                    $title = LocalizationUtility::translate('general.noTitle', 'dlf') ?: '';
                 }
                 // Append volume information.
                 if (!empty($document->getVolume())) {
-                    $title .= ', ' . LocalizationUtility::translate('volume', 'dlf') . ' ' . $document->getVolume();
+                    $title .= ', ' . LocalizationUtility::translate('collection.volume', 'dlf') . ' ' . $document->getVolume();
                 }
                 // Is this document new or updated?
                 if ($document->getCrdate() == $document->getTstamp()) {
-                    $title = LocalizationUtility::translate('plugins.feeds.new', 'dlf') . ' ' . trim($title);
+                    $title = LocalizationUtility::translate('feeds.new', 'dlf') . ' ' . trim($title);
                 } else {
-                    $title = LocalizationUtility::translate('plugins.feeds.update', 'dlf') . ' ' . trim($title);
+                    $title = LocalizationUtility::translate('feeds.update', 'dlf') . ' ' . trim($title);
                 }
 
                 $document->setTitle($title);

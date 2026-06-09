@@ -71,9 +71,9 @@ class MetadataRepositoryTest extends FunctionalTestCase
     public function canFindBySettings(): void
     {
         $metadataByLabel = $this->findBySettings([]);
-        self::assertCount(6, $metadataByLabel);
+        self::assertCount(7, $metadataByLabel);
         self::assertEquals(
-            'Ort, Untertitel, Autor, Institution, Sammlungen, Titel',
+            'Ort, Untertitel, Autor, Institution, Sammlungen, Titel, PURL',
             implode(', ', array_keys($metadataByLabel))
         );
 
@@ -102,5 +102,47 @@ class MetadataRepositoryTest extends FunctionalTestCase
             'Autor, Titel',
             implode(', ', array_keys($metadataByLabel))
         );
+    }
+
+    /**
+     * @test
+     * @group find
+     */
+    public function canFindIndexedFields(): void
+    {
+        $metadata = $this->metadataRepository->findIndexedFields();
+        self::assertEquals(6, $metadata->count());
+    }
+
+    /**
+     * @test
+     * @group find
+     */
+    public function canFindWithFormat(): void
+    {
+        $metadata = $this->metadataRepository->findWithFormat(20000, 'mods');
+        self::assertCount(2, $metadata);
+        self::assertEquals('title', $metadata[0]['index_name']);
+        self::assertEquals('collection', $metadata[1]['index_name']);
+
+        $metadata = $this->metadataRepository->findWithFormat(20000, 'alto');
+        self::assertEmpty($metadata);
+
+        $metadata = $this->metadataRepository->findWithFormat(20000, 'xyz');
+        self::assertEmpty($metadata);
+    }
+
+    /**
+     * @test
+     * @group find
+     */
+    public function canFindWithoutFormat(): void
+    {
+        $metadata = $this->metadataRepository->findWithoutFormat();
+        self::assertCount(3, $metadata);
+        self::assertCount(3, $metadata[0]);
+        self::assertEquals('author', $metadata[0]['index_name']);
+        self::assertEquals('institution', $metadata[1]['index_name']);
+        self::assertEquals('purl', $metadata[2]['index_name']);
     }
 }
