@@ -11,13 +11,17 @@
     LICENSE.txt file that was distributed with this source code.
 </f:comment>
 
+<f:if condition="{debugActive}">
+    <f:debug title="all">{_all}</f:debug>
+</f:if>
+
 <div class="tx-dlf-listview">
     <h2 class="tx-dlf-listview-label">{collection.label}</h2>
 
     <f:if condition="{collection.thumbnail}">
         <div class="tx-dlf-collection-thumbnail">
             <f:if condition="{collection.thumbnail}">
-                <f:image image="{collection.thumbnail}" alt="{f:translate(key: 'thumbnail')} {collection.label}" title="{collection.label}" maxWidth="250" />
+                <f:image image="{collection.thumbnail}" alt="{f:translate(key: 'general.thumbnail')} {collection.label}" title="{collection.label}" maxWidth="250" />
             </f:if>
         </div>
     </f:if>

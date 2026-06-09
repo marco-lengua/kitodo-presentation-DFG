@@ -12,7 +12,7 @@
  * This function increases the start parameter of the search form and submits
  * the form.
  *
- * @returns void
+ * @returns {void}
  */
 function nextResultPage() {
     var currentStart = $("#tx-dlf-toolbox-searchindocument-form input[id='tx-dlf-toolbox-searchindocument-input-start']").val();
@@ -25,7 +25,7 @@ function nextResultPage() {
  * This function decreases the start parameter of the search form and submits
  * the form.
  *
- * @returns void
+ * @returns {void}
  */
 function previousResultPage() {
     var currentStart = $("#tx-dlf-toolbox-searchindocument-form input[id='tx-dlf-toolbox-searchindocument-input-start']").val();
@@ -37,7 +37,7 @@ function previousResultPage() {
 /**
  * This function resets the start parameter on new queries.
  *
- * @returns void
+ * @returns {void}
  */
 function resetStart() {
     $("#tx-dlf-toolbox-searchindocument-form input[id='tx-dlf-toolbox-searchindocument-input-start']").val(0);
@@ -45,9 +45,9 @@ function resetStart() {
 
 /**
  * Add highlight effect for found search phrase.
- * @param {array} highlightIds
  *
- * @returns void
+ * @param {array} highlightIds
+ * @returns {void}
  */
 function addHighlightEffect(highlightIds) {
     if (highlightIds.length > 0) {
@@ -175,8 +175,7 @@ function getCurrentPage() {
  *
  * @param {array} data
  * @param {string} word
- *
- * @returns void
+ * @returns {void}
  */
 function addImageHighlight(data, word) {
     var page = getCurrentPage();
@@ -185,11 +184,11 @@ function addImageHighlight(data, word) {
         var highlights = [];
 
         data['documents'].forEach(function (element, i) {
-            if(page <= element['page'] && element['page'] < page + tx_dlf_viewer.countPages()) { // eslint-disable-line camelcase
-                if (element['highlight'].length > 0) {
-                    highlights.push(getHighlights(element['highlight']));
+            if(page <= element.page && element.page < page + tx_dlf_viewer.countPages()) { // eslint-disable-line camelcase
+                if (element.highlight.length > 0) {
+                    highlights.push(getHighlights(element.highlight));
                 }
-                addHighlightEffect(element['highlight']);
+                addHighlightEffect(element.highlight);
             }
         });
 
@@ -202,7 +201,7 @@ function addImageHighlight(data, word) {
 /**
  * Trigger search for document loaded from hit list.
  *
- * @returns void
+ * @returns {void}
  */
 function triggerSearchAfterHitLoad() {
     var queryParams = getCurrentQueryParams(getBaseUrl(" "));
@@ -244,17 +243,17 @@ $(document).ready(function() {
                 var resultItems = [];
                 var resultList = '<div class="results-active-indicator"></div><ul>';
                 var start = $( "input[id='" + input + "-start']" ).val();
-                if (data['numFound'] > 0) {
-                    data['documents'].forEach(function (element, i) {
+                if (data.numFound > 0) {
+                    data.documents.forEach(function (element, i) {
                         if (start < 0) {
                             start = i;
                         }
-                        if (element['snippet'].length > 0) {
-                            resultItems[element['page']] = '<span class="structure">'
-                                + $(id + '-label-page').text() + ' ' + element['page']
+                        if (element.snippet.length > 0) {
+                            resultItems[element.page] = '<span class="structure">'
+                                + $(id + '-label-page').text() + ' ' + element.page
                                 + '</span><br />'
                                 + '<span class="textsnippet">'
-                                + '<a href=\"' + element['url'] + '\">' + element['snippet'] + '</a>'
+                                + '<a href=\"' + element.url + '\">' + element.snippet + '</a>'
                                 + '</span>';
                         }
                     });
