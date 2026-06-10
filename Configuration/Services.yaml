@@ -60,3 +60,32 @@ services:
 
   Kitodo\Dlf\Validation\XmlSchemesValidator:
     autowire: false
+  # ── JwtTokenService ────────────────────────────────────────────────────────
+  # The $hmacSecret constructor argument cannot be autowired (it is a plain
+  # string, not a class). We inject it explicitly from the environment here.
+  # The $ttlSeconds argument has a default of 900 (15 min) and does not need
+  # to be listed unless you want a different value.
+  Kitodo\Dlf\Service\JwtTokenService:
+    public: true
+    shared: true
+    arguments:
+      $hmacSecret: '%env(DLF_JWT_SECRET)%'
+      # Uncomment and adjust if your use case requires a different TTL:
+      # $ttlSeconds: 900
+
+  # ── LendingManagerService ──────────────────────────────────────────────────
+  # The $seatTtlSeconds argument defaults to 900 (matches the JWT TTL).
+  # The repository and persistence manager are injected via inject* methods
+  # because they are Extbase-managed objects.
+  Kitodo\Dlf\Service\LendingManagerService:
+    public: true
+    shared: true
+    # $seatTtlSeconds: 900
+
+  # ── PolicyDecisionService ──────────────────────────────────────────────────
+  # All three dependencies (repository, JWT service, lending manager) are
+  # injected via inject* methods so TYPO3's Extbase DI resolver handles the
+  # Extbase-specific wiring (repositories, persistence manager) correctly.
+  Kitodo\Dlf\Service\PolicyDecisionService:
+    public: true
+    shared: true
