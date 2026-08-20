@@ -13,6 +13,8 @@
 namespace Kitodo\Dlf\Tests\Functional\Controller;
 
 use Kitodo\Dlf\Controller\CollectionController;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\Test;
 use TYPO3\CMS\Core\Core\SystemEnvironmentBuilder;
 
 class CollectionControllerTest extends AbstractControllerTestCase
@@ -33,38 +35,33 @@ class CollectionControllerTest extends AbstractControllerTestCase
         $this->setUpSolr(self::$solrCoreId, self::$storagePid, self::$solrFixtures);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
+    #[Group("listAction")]
     public function canListAction()
     {
         $settings = [
             'storagePid' => self::$storagePid,
             'solrcore' => self::$solrCoreId,
-            'collections' => '1',
-            'showSingle' => '1',
+            'collections' => '1,2',
+            'showSingle' => '0',
             'randomize' => ''
         ];
-        $templateHtml = '<html><f:for each="{collections}" as="item">{item.collection.indexName}</f:for></html>';
-        $controller = $this->setUpController(CollectionController::class, $settings, $templateHtml);
-        $request = $this->setUpRequest('list', [ 'tx_dlf' => ['id' => 1] ]);
+        $templateHtml = '<html><f:for each="{collections}" as="item">{item.collection.indexName},</f:for></html>';
 
-        $response = $controller->processRequest($request);
-        $response->getBody()->rewind();
-        $actual = $response->getBody()->getContents();
-        $expected = '<html>test-collection</html>';
+        $actual = $this->getContentsList($settings, $templateHtml);
+        $expected = '<html>test-collection,second-collection,</html>';
         $this->assertEquals($expected, $actual);
     }
 
-    /**
-     * @test
-     */
-    public function canListActionForwardToShow()
+    #[Test]
+    #[Group("listAction")]
+    public function canListActionForwardToShowEvenIfMoreCollectionsAreFound()
     {
         $settings = [
             'storagePid' => self::$storagePid,
             'solrcore' => self::$solrCoreId,
-            'collections' => '1',
+            'collections' => '1,2',
+            'showSingle' => '1',
             'randomize' => ''
         ];
         $controller = $this->setUpController(CollectionController::class, $settings);
@@ -75,10 +72,9 @@ class CollectionControllerTest extends AbstractControllerTestCase
         $this->assertEquals(303, $response->getStatusCode());
     }
 
-    /**
-     * @test
-     */
-    public function canShowAction()
+    #[Test]
+    #[Group("listAction")]
+    public function canListActionForwardToShowIfOnlyOneCollectionIsFound()
     {
         $settings = [
             'storagePid' => self::$storagePid,
@@ -87,22 +83,115 @@ class CollectionControllerTest extends AbstractControllerTestCase
             'showSingle' => '0',
             'randomize' => ''
         ];
-        $templateHtml = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"><f:for each="{documents.solrResults.documents}" as="page" iteration="docIterator">{page.title},</f:for></html>';
-
-        $controller = $this->setUpController(CollectionController::class, $settings, $templateHtml);
-        $request = $this->setUpRequest('show', [], ['collection' => '1' ]);
+        $controller = $this->setUpController(CollectionController::class, $settings);
+        $request = $this->setUpRequest('list', ['tx_dlf' => ['id' => 1] ]);
+        $request = $request->withAttribute('applicationType', SystemEnvironmentBuilder::REQUESTTYPE_BE);
 
         $response = $controller->processRequest($request);
-        $response->getBody()->rewind();
-        $actual = $response->getBody()->getContents();
-        $expected = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers">10 Keyboard pieces - Go. S. 658,</html>';
-        $this->assertEquals($expected, $actual);
-
+        $this->assertEquals(303, $response->getStatusCode());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
+    #[Group("showAction")]
+    public function canShowSingleCollection()
+    {
+        $settings = [
+            'storagePid' => self::$storagePid,
+            'solrcore' => self::$solrCoreId,
+            'collections' => '1',
+            'showSingle' => '0',
+            'showOverview' => '1',
+            'showDocuments' => '1',
+            'randomize' => ''
+        ];
+        $templateHtml = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"><f:for each="{documents.solrResults.documents}" as="page" iteration="docIterator">{page.title},</f:for></html>';
+
+        $actual = $this->getContentsShow($settings, $templateHtml);
+        $expected = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers">10 Keyboard pieces - Go. S. 658,</html>';
+        $this->assertEquals($expected, $actual);
+    }
+
+    #[Test]
+    #[Group("showAction")]
+    public function canShowCollectionOverview()
+    {
+        $settings = [
+            'storagePid' => self::$storagePid,
+            'solrcore' => self::$solrCoreId,
+            'collections' => '1',
+            'showSingle' => '1',
+            'showOverview' => '1',
+            'showDocuments' => '1',
+            'randomize' => ''
+        ];
+        $templateHtml = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers">{collection.label}</html>';
+
+        $actual = $this->getContentsShow($settings, $templateHtml);;
+        $expected = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers">Test Collection</html>';
+        $this->assertEquals($expected, $actual);
+    }
+
+    #[Test]
+    #[Group("showAction")]
+    public function canNotShowCollectionOverview()
+    {
+        $settings = [
+            'storagePid' => self::$storagePid,
+            'solrcore' => self::$solrCoreId,
+            'collections' => '1',
+            'showSingle' => '1',
+            'showOverview' => '0',
+            'showDocuments' => '1',
+            'randomize' => ''
+        ];
+        $templateHtml = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers">{collection.label}</html>';
+
+        $actual = $this->getContentsShow($settings, $templateHtml);;
+        $expected = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"></html>';
+        $this->assertEquals($expected, $actual);
+    }
+
+    #[Test]
+    #[Group("showAction")]
+    public function canShowCollectionDocuments()
+    {
+        $settings = [
+            'storagePid' => self::$storagePid,
+            'solrcore' => self::$solrCoreId,
+            'collections' => '1',
+            'showSingle' => '1',
+            'showOverview' => '1',
+            'showDocuments' => '1',
+            'randomize' => ''
+        ];
+        $templateHtml = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"><f:for each="{documents.solrResults.documents}" as="page" iteration="docIterator">{page.title},</f:for></html>';
+
+        $actual = $this->getContentsShow($settings, $templateHtml);;
+        $expected = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers">10 Keyboard pieces - Go. S. 658,</html>';
+        $this->assertEquals($expected, $actual);
+    }
+
+    #[Test]
+    #[Group("showAction")]
+    public function canNotShowCollectionDocuments()
+    {
+        $settings = [
+            'storagePid' => self::$storagePid,
+            'solrcore' => self::$solrCoreId,
+            'collections' => '1',
+            'showSingle' => '1',
+            'showOverview' => '1',
+            'showDocuments' => '0',
+            'randomize' => ''
+        ];
+        $templateHtml = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"><f:for each="{documents.solrResults.documents}" as="page" iteration="docIterator">{page.title},</f:for></html>';
+
+        $actual = $this->getContentsShow($settings, $templateHtml);;
+        $expected = '<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"></html>';
+        $this->assertEquals($expected, $actual);
+    }
+
+    #[Test]
     public function canShowSortedAction()
     {
         $settings = [
@@ -118,5 +207,51 @@ class CollectionControllerTest extends AbstractControllerTestCase
 
         $response = $controller->processRequest($request);
         $this->assertEquals(303, $response->getStatusCode());
+    }
+
+    /**
+     * @access private
+     *
+     * @param array $settings
+     * @param string $templateHtml
+     *
+     * @return string
+     */
+    private function getContentsList(array $settings, string $templateHtml): string
+    {
+        return $this->getContents('list', [ 'tx_dlf' => ['id' => 1] ], $settings, $templateHtml);
+    }
+
+    /**
+     * @access private
+     *
+     * @param array $settings
+     * @param string $templateHtml
+     *
+     * @return string
+     */
+    private function getContentsShow(array $settings, string $templateHtml): string
+    {
+        return $this->getContents('show', ['collection' => '1' ], $settings, $templateHtml);
+    }
+
+    /**
+     * @access private
+     *
+     * @param string $action
+     * @param array $parameters
+     * @param array $settings
+     * @param string $templateHtml
+     *
+     * @return string
+     */
+    private function getContents(string $action, array $parameters, array $settings, string $templateHtml): string
+    {
+        $controller = $this->setUpController(CollectionController::class, $settings, $templateHtml);
+        $request = $this->setUpRequest($action, [], $parameters);
+
+        $response = $controller->processRequest($request);
+        $response->getBody()->rewind();
+        return $response->getBody()->getContents();
     }
 }

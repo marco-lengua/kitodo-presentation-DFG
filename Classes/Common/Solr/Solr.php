@@ -33,12 +33,12 @@ use TYPO3\CMS\Core\Utility\MathUtility;
  *
  * @access public
  *
- * @property array $config this holds the Solr configuration
+ * @property mixed[] $config this holds the Solr configuration
  * @property-read string|null $core this holds the core name for the current instance
  * @property-write int $configPid this holds the PID for the configuration
  * @property int $limit this holds the max results
  * @property-read int $numberOfHits this holds the number of hits for last search
- * @property-write array $params this holds the additional query parameters
+ * @property-write mixed[] $params this holds the additional query parameters
  * @property-read bool $ready flag if the Solr service is instantiated successfully
  * @property-read Client $service this holds the Solr service object
  */
@@ -122,8 +122,10 @@ class Solr implements LoggerAwareInterface
      * @param string $core The name of the new core. If empty, the next available core name is used.
      *
      * @return string The name of the new core
+     *
+     * @throws \Exception If the core could not be created
      */
-    public static function createCore($core = ''): string
+    public static function createCore(string $core = ''): string
     {
         // Get next available core name if none given.
         if (empty($core)) {
@@ -147,7 +149,14 @@ class Solr implements LoggerAwareInterface
                 $action->setInstanceDir($core);
                 $query->setAction($action);
                 try {
-                    $response = $solrAdmin->service->coreAdmin($query);
+                    $previousErrorLevel = error_reporting(error_reporting() & ~E_DEPRECATED);
+                    try {
+                        $response = $solrAdmin->service->coreAdmin($query);
+                        error_reporting($previousErrorLevel);
+                    } catch (\Exception $e) {
+                        error_reporting($previousErrorLevel);
+                        throw $e;
+                    }
                     if ($response->getWasSuccessful()) {
                         // Core successfully created.
                         return $core;
@@ -228,33 +237,24 @@ class Solr implements LoggerAwareInterface
         if (empty(self::$fields)) {
             $conf = GeneralUtility::makeInstance(ExtensionConfiguration::class)->get(self::$extKey, 'solr');
             $solrFields = $conf['fields'];
-            self::$fields['id'] = $solrFields['id'];
-            self::$fields['uid'] = $solrFields['uid'];
-            self::$fields['pid'] = $solrFields['pid'];
-            self::$fields['page'] = $solrFields['page'];
-            self::$fields['partof'] = $solrFields['partof'];
-            self::$fields['root'] = $solrFields['root'];
-            self::$fields['sid'] = $solrFields['sid'];
-            self::$fields['toplevel'] = $solrFields['toplevel'];
-            self::$fields['type'] = $solrFields['type'];
-            self::$fields['title'] = $solrFields['title'];
-            self::$fields['volume'] = $solrFields['volume'];
-            self::$fields['structure_path'] = $solrFields['structurePath'];
-            self::$fields['date'] = $solrFields['date'] ?? null;
-            self::$fields['thumbnail'] = $solrFields['thumbnail'];
-            self::$fields['default'] = $solrFields['default'];
-            self::$fields['timestamp'] = $solrFields['timestamp'];
-            self::$fields['autocomplete'] = $solrFields['autocomplete'];
-            self::$fields['fulltext'] = $solrFields['fulltext'];
-            self::$fields['record_id'] = $solrFields['recordId'];
-            self::$fields['purl'] = $solrFields['purl'];
-            self::$fields['urn'] = $solrFields['urn'];
-            self::$fields['location'] = $solrFields['location'];
-            self::$fields['collection'] = $solrFields['collection'];
-            self::$fields['license'] = $solrFields['license'];
-            self::$fields['terms'] = $solrFields['terms'];
-            self::$fields['restrictions'] = $solrFields['restrictions'];
-            self::$fields['geom'] = $solrFields['geom'];
+
+            // Define standard field mappings (config key → output key)
+            $fieldMap = [
+                'id', 'uid', 'pid', 'page', 'partof', 'root', 'sid', 'toplevel',
+                'type', 'title', 'volume', 'date', 'thumbnail', 'default',
+                'timestamp', 'autocomplete', 'fulltext', 'purl', 'urn',
+                'location', 'collection', 'license', 'terms', 'restrictions', 'geom'
+            ];
+
+            foreach ($fieldMap as $field) {
+                self::$fields[$field] = $solrFields[$field] ?? $field;
+            }
+
+            // Handle special mappings (camelCase → snake_case field name conversions)
+            self::$fields['logical_id'] = $solrFields['logicalId'] ?? 'logical_id';
+            self::$fields['physical_id'] = $solrFields['physicalId'] ?? 'physical_id';
+            self::$fields['structure_path'] = $solrFields['structurePath'] ?? 'structure_path';
+            self::$fields['record_id'] = $solrFields['recordId'] ?? 'record_id';
         }
 
         return self::$fields;
@@ -265,39 +265,33 @@ class Solr implements LoggerAwareInterface
      *
      * @access public
      *
-     * @param mixed $core Name or UID of the core to load or null to get core admin endpoint
+     * @param string|int|null $core Name or UID of the core to load or null to get core admin endpoint
      *
      * @return Solr Instance of this class
      */
-    public static function getInstance($core = null): Solr
+    public static function getInstance(mixed $core = null): Solr
     {
-        // Get core name if UID is given.
+        // Resolve a numeric core UID to its configured index name.
         if (MathUtility::canBeInterpretedAsInteger($core)) {
-            $core = Helper::getIndexNameFromUid($core, 'tx_dlf_solrcores');
+            $core = Helper::getIndexNameFromUid((int) $core, 'tx_dlf_solrcores');
         }
-        // Check if core is set or null.
-        if (
-            empty($core)
-            && $core !== null
-        ) {
+
+        // Reject empty string values while still allowing null to mean "no core".
+        /** @var ?string $core */
+        if ($core !== null && empty($core)) {
             Helper::error('Invalid core UID or name given for Apache Solr');
         }
-        if (!empty($core)) {
-            // Check if there is an instance in the registry already.
-            if (
-                array_key_exists($core, self::$registry)
-                && self::$registry[$core] instanceof self
-            ) {
-                // Return singleton instance if available.
-                return self::$registry[$core];
-            }
+
+        if (!empty($core) && array_key_exists($core, self::$registry)) {
+            return self::$registry[$core];
         }
-        // Create new instance...
+
         $instance = new self($core);
-        // ...and save it to registry.
+
         if (!empty($instance->core)) {
             self::$registry[$instance->core] = $instance;
         }
+
         return $instance;
     }
 
@@ -540,7 +534,7 @@ class Solr implements LoggerAwareInterface
      *
      * @return void
      */
-    public function __set(string $var, $value): void
+    public function __set(string $var, mixed $value): void
     {
         $method = 'magicSet' . ucfirst($var);
         if (
@@ -596,7 +590,14 @@ class Solr implements LoggerAwareInterface
         }
         $query->setAction($action);
         try {
-            $response = $this->service->coreAdmin($query);
+            $previousErrorLevel = error_reporting(error_reporting() & ~E_DEPRECATED);
+            try {
+                $response = $this->service->coreAdmin($query);
+                error_reporting($previousErrorLevel);
+            } catch (\Exception $e) {
+                error_reporting($previousErrorLevel);
+                throw $e;
+            }
             if ($response->getWasSuccessful()) {
                 // Solr is reachable, but is the core as well?
                 if ($core !== null) {

@@ -13,6 +13,7 @@
 namespace Kitodo\Dlf\Tests\Functional\Api;
 
 use Kitodo\Dlf\Tests\Functional\FunctionalTestCase;
+use PHPUnit\Framework\Attributes\Test;
 use Psr\Http\Message\ResponseInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\TestingFramework\Core\Functional\Framework\Frontend\InternalRequest;
@@ -34,15 +35,13 @@ class PageViewProxyDisabledTest extends FunctionalTestCase
     protected function queryProxy(array $query, string $method = 'GET'): ResponseInterface
     {
         $request = (new InternalRequest($this->baseUrl))->withQueryParameters(
-            array_merge([ 'eID' => 'tx_dlf_pageview_proxy' ], $query)
+            array_merge([ 'middleware' => 'dlf/page-view-proxy' ], $query)
         )->withMethod($method);
 
         return $this->executeInternalRequest($request);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function cannotAccessPageWhenProxyIsDisabled(): void
     {
         $targetUrl = 'http://web:8001/Tests/Fixtures/PageViewProxy/test.txt';

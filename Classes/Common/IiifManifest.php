@@ -27,6 +27,7 @@ use Ubl\Iiif\Presentation\Common\Model\Resources\RangeInterface;
 use Ubl\Iiif\Presentation\Common\Vocabulary\Motivation;
 use Ubl\Iiif\Presentation\V1\Model\Resources\AbstractIiifResource1;
 use Ubl\Iiif\Presentation\V2\Model\Resources\AbstractIiifResource2;
+use Ubl\Iiif\Presentation\V2\Model\Resources\Canvas2;
 use Ubl\Iiif\Presentation\V3\Model\Resources\AbstractIiifResource3;
 use Ubl\Iiif\Services\AbstractImageService;
 use Ubl\Iiif\Services\Service;
@@ -54,7 +55,6 @@ use Ubl\Iiif\Tools\IiifHelper;
  * @property-read array $physicalStructureInfo this holds the physical structure metadata
  * @property bool $physicalStructureLoaded flag with information if the physical structure is loaded
  * @property array $rawTextArray this holds the documents' raw text pages with their corresponding structMap//div's ID (METS) or Range / Manifest / Sequence ID (IIIF) as array key
- * @property-read bool $ready Is the document instantiated successfully?
  * @property-read string $recordId the METS file's / IIIF manifest's record identifier
  * @property-read int $rootId this holds the UID of the root document or zero if not multi-volumed
  * @property-read array $smLinks this holds the smLinks between logical and physical structMap
@@ -136,18 +136,10 @@ final class IiifManifest extends AbstractDocument
                 }
             }
             // For now, it's a hardcoded ID, not only as a fallback
-            if (!isset($this->recordId)) {
+            if (empty($this->recordId)) {
                 $this->recordId = $this->iiif->getId();
             }
         }
-    }
-
-    /**
-     * @see AbstractDocument::getDocument()
-     */
-    protected function getDocument(): IiifResourceInterface
-    {
-        return $this->iiif;
     }
 
     /**
@@ -174,89 +166,129 @@ final class IiifManifest extends AbstractDocument
     }
 
     /**
-     * @see AbstractDocument::magicGetPhysicalStructure()
+     * Initializes the manifest structure for a given IIIF ID.
+     *
+     * @access private
+     *
+     * @param string $iiifId
+     *
+     * @return void
      */
-    protected function magicGetPhysicalStructure(): array
+    private function initializeManifestStructure(string $iiifId): void
     {
-        // Is there no physical structure array yet?
-        if (!$this->physicalStructureLoaded) {
-            if (!($this->iiif instanceof ManifestInterface)) {
-                return [];
-            }
+        $this->physicalStructureInfo[$iiifId] = [
+            'id' => $iiifId,
+            'dmdId' => $iiifId,
+            'label' => $this->iiif->getLabelForDisplay(),
+            'orderlabel' => $this->iiif->getLabelForDisplay(),
+            'type' => 'physSequence',
+            'contentIds' => null,
+        ];
+    }
 
-            $iiifId = $this->iiif->getId();
-            $this->physicalStructureInfo[$iiifId]['id'] = $iiifId;
-            $this->physicalStructureInfo[$iiifId]['dmdId'] = $iiifId;
-            $this->physicalStructureInfo[$iiifId]['label'] = $this->iiif->getLabelForDisplay();
-            $this->physicalStructureInfo[$iiifId]['orderlabel'] = $this->iiif->getLabelForDisplay();
-            $this->physicalStructureInfo[$iiifId]['type'] = 'physSequence';
-            $this->physicalStructureInfo[$iiifId]['contentIds'] = null;
+    /**
+     * Process given canvas to extract and set physical structure metadata, file information and annotation containers.
+     *
+     * @access private
+     *
+     * @param string $iiifId
+     * @param string $canvasId
+     * @param CanvasInterface $canvas
+     * @param mixed[] $fileUseThumbs
+     * @param mixed[] $fileUses
+     *
+     * @return void
+     */
+    private function processCanvas(string $iiifId, string $canvasId, CanvasInterface $canvas, array $fileUseThumbs, array $fileUses): void
+    {
+        $thumbnailUrl = $canvas->getThumbnailUrl();
 
-            $this->setFileUseDownload($iiifId, $this->iiif);
-            $this->setFileUseFulltext($iiifId, $this->iiif);
-
-            $fileUseThumbs = $this->useGroupsConfiguration->getThumbnail();
-            $fileUses = $this->useGroupsConfiguration->getImage();
-
-            if (!empty($this->iiif->getDefaultCanvases())) {
-                // canvases have not order property, but the context defines canveses as @list with a specific order, so we can provide an alternative
-                $elements = [];
-                $canvasOrder = 0;
-                foreach ($this->iiif->getDefaultCanvases() as $canvas) {
-                    $canvasOrder++;
-                    $thumbnailUrl = $canvas->getThumbnailUrl();
-                    // put thumbnails in thumbnail filegroup
-                    if (
-                        !empty($thumbnailUrl)
-                        && empty($this->physicalStructureInfo[$iiifId]['files'][$fileUseThumbs[0]])
-                    ) {
-                        $this->physicalStructureInfo[$iiifId]['files'][$fileUseThumbs[0]] = $thumbnailUrl;
-                    }
-                    // populate structural metadata info
-                    $elements[$canvasOrder] = $canvas->getId();
-                    $this->physicalStructureInfo[$elements[$canvasOrder]]['id'] = $canvas->getId();
-                    $this->physicalStructureInfo[$elements[$canvasOrder]]['dmdId'] = null;
-                    $this->physicalStructureInfo[$elements[$canvasOrder]]['label'] = $canvas->getLabelForDisplay();
-                    $this->physicalStructureInfo[$elements[$canvasOrder]]['orderlabel'] = $canvas->getLabelForDisplay();
-                    // assume that a canvas always represents a page
-                    $this->physicalStructureInfo[$elements[$canvasOrder]]['type'] = 'page';
-                    $this->physicalStructureInfo[$elements[$canvasOrder]]['contentIds'] = null;
-                    $this->physicalStructureInfo[$elements[$canvasOrder]]['annotationContainers'] = null;
-                    if (!empty($canvas->getPossibleTextAnnotationContainers(Motivation::PAINTING))) {
-                        $this->physicalStructureInfo[$elements[$canvasOrder]]['annotationContainers'] = [];
-                        foreach ($canvas->getPossibleTextAnnotationContainers(Motivation::PAINTING) as $annotationContainer) {
-                            $this->physicalStructureInfo[$elements[$canvasOrder]]['annotationContainers'][] = $annotationContainer->getId();
-                            if ($this->getIndexAnnotations() == 1) {
-                                $this->hasFulltext = true;
-                                $this->hasFulltextSet = true;
-                            }
-                        }
-                    }
-
-                    $this->setFileUseFulltext($elements[$canvasOrder], $canvas);
-
-                    if (!empty($fileUses)) {
-                        $image = $canvas->getImageAnnotations()[0];
-                        foreach ($fileUses as $fileUse) {
-                            if ($image->getBody() !== null && $image->getBody() instanceof ContentResourceInterface) {
-                                $this->physicalStructureInfo[$elements[$canvasOrder]]['files'][$fileUse] = $image->getBody()->getId();
-                            }
-                        }
-                    }
-                    if (!empty($thumbnailUrl)) {
-                        $this->physicalStructureInfo[$elements[$canvasOrder]]['files'][$fileUseThumbs] = $thumbnailUrl;
-                    }
-
-                    $this->setFileUseDownload($elements[$canvasOrder], $canvas);
-                }
-                $this->numPages = $canvasOrder;
-                // Merge and re-index the array to get nice numeric indexes.
-                array_unshift($elements, $iiifId);
-                $this->physicalStructure = $elements;
-            }
-            $this->physicalStructureLoaded = true;
+        // Put thumbnails in thumbnail filegroup if empty
+        if (!empty($thumbnailUrl) && empty($this->physicalStructureInfo[$iiifId]['files'][$fileUseThumbs[0]])) {
+            $this->physicalStructureInfo[$iiifId]['files'][$fileUseThumbs[0]] = $thumbnailUrl;
         }
-        return $this->physicalStructure;
+
+        // Base structural metadata info
+        $this->physicalStructureInfo[$canvasId] = [
+            'id' => $canvasId,
+            'dmdId' => null,
+            'label'  => $canvas->getLabelForDisplay(),
+            'orderlabel' => $canvas->getLabelForDisplay(),
+            'type' => 'page',
+            'contentIds' => null,
+            'annotationContainers' => null,
+        ];
+
+        $this->processCanvasAnnotations($canvasId, $canvas);
+        $this->setFileUseFulltext($canvasId, $canvas);
+        $this->processCanvasImages($canvasId, $canvas, $fileUses);
+
+        if (!empty($thumbnailUrl)) {
+            $thumbKey = $fileUseThumbs[0] ?? $fileUseThumbs;
+            $this->physicalStructureInfo[$canvasId]['files'][$thumbKey] = $thumbnailUrl;
+        }
+
+        $this->setFileUseDownload($canvasId, $canvas);
+    }
+
+    /**
+     * Process canvas annotations.
+     *
+     * @access private
+     *
+     * @param string $canvasId
+     * @param CanvasInterface $canvas
+     *
+     * @return void
+     */
+    private function processCanvasAnnotations(string $canvasId, CanvasInterface $canvas): void
+    {
+        $containers = $canvas->getPossibleTextAnnotationContainers(Motivation::PAINTING);
+        if (empty($containers)) {
+            return;
+        }
+
+        $this->physicalStructureInfo[$canvasId]['annotationContainers'] = [];
+        foreach ($containers as $annotationContainer) {
+            $this->physicalStructureInfo[$canvasId]['annotationContainers'][] = $annotationContainer->getId();
+
+            if ($this->getIndexAnnotations() === 1) {
+                $this->hasFulltext = true;
+                $this->hasFulltextSet = true;
+            }
+        }
+    }
+
+    /**
+     * Process canvas images.
+     *
+     * @access private
+     *
+     * @param string $canvasId
+     * @param CanvasInterface $canvas
+     * @param mixed[] $fileUses
+     *
+     * @return void
+     */
+    private function processCanvasImages(string $canvasId, CanvasInterface $canvas, array $fileUses): void
+    {
+        if (empty($fileUses)) {
+            return;
+        }
+
+        $imageAnnotations = $canvas->getImageAnnotations();
+        if (empty($imageAnnotations)) {
+            return;
+        }
+
+        $image = $imageAnnotations[0];
+        $body = $image->getBody();
+
+        if ($body instanceof ContentResourceInterface) {
+            foreach ($fileUses as $fileUse) {
+                $this->physicalStructureInfo[$canvasId]['files'][$fileUse] = $body->getId();
+            }
+        }
     }
 
     /**
@@ -396,57 +428,114 @@ final class IiifManifest extends AbstractDocument
                 $details['type'] = $metadata['type'][0];
             }
         }
+
         $details['thumbnailId'] = $resource->getThumbnailUrl();
         $details['points'] = '';
+
         // Load structural mapping
         $this->magicGetSmLinks();
         // Load physical structure.
         $this->magicGetPhysicalStructure();
 
-        if ($resource instanceof ManifestInterface || $resource instanceof RangeInterface) {
-            $startCanvas = $resource->getStartCanvasOrFirstCanvas();
-        }
-        if (isset($startCanvas)) {
-            $details['pagination'] = $startCanvas->getLabel();
-            $startCanvasIndex = array_search($startCanvas, $this->iiif->getDefaultCanvases());
-            if ($startCanvasIndex !== false) {
-                $details['points'] = $startCanvasIndex + 1;
-            }
-        }
+        $this->applyStartCanvasInfo($details, $resource);
 
         // Keep for later usage.
         $this->logicalUnits[$details['id']] = $details;
+
         // Walk the structure recursively? And are there any children of the current element?
         if ($recursive) {
             $processedStructures[] = $resource->getId();
             $details['children'] = [];
+
             if ($resource instanceof ManifestInterface && $resource->getRootRanges() != null) {
-                $rangesToAdd = [];
-                $rootRanges = [];
-                if (count($this->iiif->getRootRanges()) == 1 && $this->iiif->getRootRanges()[0]->isTopRange()) {
-                    $rangesToAdd = $this->iiif->getRootRanges()[0]->getMemberRangesAndRanges();
-                } else {
-                    $rangesToAdd = $this->iiif->getRootRanges();
-                }
-                foreach ($rangesToAdd as $range) {
-                    $rootRanges[] = $range;
-                }
-                foreach ($rootRanges as $range) {
-                    if ((array_search($range->getId(), $processedStructures) == false)) {
-                        $details['children'][] = $this->getLogicalStructureInfo($range, true, $processedStructures);
-                    }
-                }
+                $this->addChildrenFromManifest($details, $resource, $processedStructures);
             } elseif ($resource instanceof RangeInterface) {
-                if (!empty($resource->getAllRanges())) {
-                    foreach ($resource->getAllRanges() as $range) {
-                        if (!array_search($range->getId(), $processedStructures)) {
-                            $details['children'][] = $this->getLogicalStructureInfo($range, true, $processedStructures);
-                        }
-                    }
+                $this->addChildrenFromRange($details, $resource, $processedStructures);
+            }
+        }
+
+        return $details;
+    }
+
+    /**
+     * Apply start canvas info (pagination + points) to details if available.
+     *
+     * @access private
+     *
+     * @param array<string, string> $details Logical structure array to which the start canvas info should be applied
+     * @param IiifResourceInterface $resource IIIF resource, either a manifest or range, for which the start canvas info should be applied
+     *
+     * @return void
+     */
+    private function applyStartCanvasInfo(array &$details, IiifResourceInterface $resource): void
+    {
+        if ($resource instanceof ManifestInterface || $resource instanceof RangeInterface) {
+            $startCanvas = $resource->getStartCanvasOrFirstCanvas();
+            if (isset($startCanvas)) {
+                $details['pagination'] = $startCanvas->getLabel();
+                $startCanvasIndex = array_search($startCanvas, $this->iiif->getDefaultCanvases(), true);
+                if ($startCanvasIndex !== false) {
+                    $details['points'] = $startCanvasIndex + 1;
                 }
             }
         }
-        return $details;
+    }
+
+    /**
+     * Add children ranges when resource is a ManifestInterface.
+     *
+     * @access private
+     *
+     * @param array<string, string> $details Logical structure array to which the children should be added
+     * @param ManifestInterface $resource IIIF manifest resource for which the children should be added
+     * @param mixed[] $processedStructures IIIF resources that already have been processed
+     *
+     * @return void
+     */
+    private function addChildrenFromManifest(array &$details, ManifestInterface $resource, array &$processedStructures): void
+    {
+        $resourceRootRanges = $resource->getRootRanges();
+
+        // Determine ranges to add according to topRange handling
+        if (count($resourceRootRanges) == 1 && $resourceRootRanges[0]->isTopRange()) {
+            $rangesToAdd = $resourceRootRanges[0]->getMemberRangesAndRanges();
+        } else {
+            $rangesToAdd = $resourceRootRanges;
+        }
+
+        // Normalize into a simple array and iterate
+        $rootRanges = [];
+        foreach ($rangesToAdd as $range) {
+            $rootRanges[] = $range;
+        }
+        foreach ($rootRanges as $range) {
+            if (!in_array($range->getId(), $processedStructures, true)) {
+                $details['children'][] = $this->getLogicalStructureInfo($range, true, $processedStructures);
+            }
+        }
+    }
+
+    /**
+     * Add children ranges when resource is a RangeInterface.
+     *
+     * @access private
+     *
+     * @param array<string, string> $details Logical structure array to which the children should be added
+     * @param RangeInterface $resource IIIF range resource for which the children should be added
+     * @param mixed[] $processedStructures IIIF resources that already have been processed
+     *
+     * @return void
+     */
+    private function addChildrenFromRange(array &$details, RangeInterface $resource, array &$processedStructures): void
+    {
+        $allRanges = $resource->getAllRanges();
+        if (!empty($allRanges)) {
+            foreach ($allRanges as $range) {
+                if (!in_array($range->getId(), $processedStructures, true)) {
+                    $details['children'][] = $this->getLogicalStructureInfo($range, true, $processedStructures);
+                }
+            }
+        }
     }
 
     /**
@@ -516,41 +605,22 @@ final class IiifManifest extends AbstractDocument
         $metadata = $this->initializeMetadata('IIIF');
 
         $allResults = $this->metadataRepository->findForIiif($this->configPid, $this->getIiifVersion());
+        /** @var IiifResourceInterface $iiifResource */
         $iiifResource = $this->iiif->getContainedResourceById($id);
         foreach ($allResults as $resArray) {
             // Set metadata field's value(s).
             if ($resArray['format'] > 0 && !empty($resArray['xpath'])) {
-                $values = $iiifResource->jsonPath($resArray['xpath']);
-                if (is_string($values)) {
-                    $metadata[$resArray['index_name']] = [trim($values)];
-                } elseif ($values instanceof JSONPath && is_array($values->getData()) && count($values->getData()) > 1) {
-                    $metadata[$resArray['index_name']] = [];
-                    foreach ($values->getData() as $value) {
-                        $metadata[$resArray['index_name']][] = trim((string) $value);
-                    }
+                $values = $this->evaluateJsonPathValues($iiifResource, $resArray['xpath']);
+                if (is_array($values)) {
+                    $metadata[$resArray['index_name']] = $values;
                 }
             }
+
             // Set default value if applicable.
-            if (empty($metadata[$resArray['index_name']][0]) && strlen($resArray['default_value']) > 0) {
-                $metadata[$resArray['index_name']] = [$resArray['default_value']];
-            }
+            $this->setDefaultIfEmpty($metadata, $resArray['index_name'], $resArray['default_value']);
+
             // Set sorting value if applicable.
-            if (!empty($metadata[$resArray['index_name']]) && $resArray['is_sortable']) {
-                if ($resArray['format'] > 0 && !empty($resArray['xpath_sorting'])) {
-                    $values = $iiifResource->jsonPath($resArray['xpath_sorting']);
-                    if (is_string($values)) {
-                        $metadata[$resArray['index_name'] . '_sorting'][0] = [trim((string) $values)];
-                    } elseif ($values instanceof JSONPath && is_array($values->getData()) && count($values->getData()) > 1) {
-                        $metadata[$resArray['index_name']] = [];
-                        foreach ($values->getData() as $value) {
-                            $metadata[$resArray['index_name'] . '_sorting'][0] = trim((string) $value);
-                        }
-                    }
-                }
-                if (empty($metadata[$resArray['index_name'] . '_sorting'][0])) {
-                    $metadata[$resArray['index_name'] . '_sorting'][0] = $metadata[$resArray['index_name']][0];
-                }
-            }
+            $this->setSortingValue($metadata, $iiifResource, $resArray);
         }
         // Set date to empty string if not present.
         if (empty($metadata['date'][0])) {
@@ -560,24 +630,95 @@ final class IiifManifest extends AbstractDocument
     }
 
     /**
-     * @see AbstractDocument::magicGetSmLinks()
+     * Evaluate a JSONPath on a IIIF resource and return trimmed values or null if none.
+     *
+     * @access private
+     *
+     * @param IiifResourceInterface $iiifResource
+     * @param string $xpath
+     *
+     * @return string[]|null
      */
-    protected function magicGetSmLinks(): array
+    private function evaluateJsonPathValues(IiifResourceInterface $iiifResource, string $xpath): ?array
     {
-        if (!$this->smLinksLoaded && isset($this->iiif) && $this->iiif instanceof ManifestInterface) {
-            if (!empty($this->iiif->getDefaultCanvases())) {
-                foreach ($this->iiif->getDefaultCanvases() as $canvas) {
-                    $this->smLinkCanvasToResource($canvas, $this->iiif);
-                }
-            }
-            if (!empty($this->iiif->getStructures())) {
-                foreach ($this->iiif->getStructures() as $range) {
-                    $this->smLinkRangeCanvasesRecursively($range);
-                }
-            }
-            $this->smLinksLoaded = true;
+        try {
+            $values = $iiifResource->jsonPath($xpath);
+        } catch (\Exception $e) {
+            // Preserve previous behavior: treat errors as no value
+            return null;
         }
-        return $this->smLinks;
+
+        if (is_string($values)) {
+            return [trim($values)];
+        }
+
+        if ($values instanceof JSONPath && is_array($values->getData()) && count($values->getData()) > 1) {
+            $result = [];
+            foreach ($values->getData() as $value) {
+                $result[] = trim((string) $value);
+            }
+            return $result;
+        }
+
+        return null;
+    }
+
+    /**
+     * Set default metadata value if no value present yet.
+     *
+     * @access private
+     *
+     * @param mixed[] $metadata
+     * @param string $indexName
+     * @param string $defaultValue
+     *
+     * @return void
+     */
+    private function setDefaultIfEmpty(array &$metadata, string $indexName, string $defaultValue): void
+    {
+        if (empty($metadata[$indexName][0]) && strlen($defaultValue) > 0) {
+            $metadata[$indexName] = [$defaultValue];
+        }
+    }
+
+    /**
+     * Evaluate and set sorting metadata if applicable.
+     *
+     * @access private
+     *
+     * @param mixed[] $metadata
+     * @param IiifResourceInterface $iiifResource
+     * @param mixed[] $resArray
+     *
+     * @return void
+     */
+    private function setSortingValue(array &$metadata, IiifResourceInterface $iiifResource, array $resArray): void
+    {
+        if (empty($metadata[$resArray['index_name']]) || !$resArray['is_sortable']) {
+            return;
+        }
+
+        if ($resArray['format'] > 0 && !empty($resArray['xpath_sorting'])) {
+            try {
+                $values = $iiifResource->jsonPath($resArray['xpath_sorting']);
+            } catch (\Exception $e) {
+                $values = null;
+            }
+
+            if (is_string($values)) {
+                $metadata[$resArray['index_name'] . '_sorting'][0] = [trim($values)];
+            } elseif ($values instanceof JSONPath && is_array($values->getData()) && count($values->getData()) > 1) {
+                // preserve original behavior where an empty array was set in this branch
+                $metadata[$resArray['index_name']] = [];
+                foreach ($values->getData() as $value) {
+                    $metadata[$resArray['index_name'] . '_sorting'][0] = trim((string) $value);
+                }
+            }
+        }
+
+        if (empty($metadata[$resArray['index_name'] . '_sorting'][0])) {
+            $metadata[$resArray['index_name'] . '_sorting'][0] = $metadata[$resArray['index_name']][0];
+        }
     }
 
     /**
@@ -598,8 +739,9 @@ final class IiifManifest extends AbstractDocument
             }
         }
         // recursive call for all ranges
-        if (!empty($range->getAllRanges())) {
-            foreach ($range->getAllRanges() as $childRange) {
+        $allRanges = $range->getAllRanges();
+        if (!empty($allRanges)) {
+            foreach ($allRanges as $childRange) {
                 $this->smLinkRangeCanvasesRecursively($childRange);
             }
         }
@@ -673,15 +815,33 @@ final class IiifManifest extends AbstractDocument
     }
 
     /**
+     * @see AbstractDocument::getToplevelId()
+     */
+    public function getToplevelId(): string
+    {
+        if (empty($this->toplevelId)) {
+            if (isset($this->iiif)) {
+                $this->toplevelId = $this->iiif->getId();
+            }
+        }
+        return $this->toplevelId;
+    }
+
+    /**
      * Returns the underlying IiifResourceInterface.
      *
      * @access public
      *
-     * @return IiifResourceInterface
+     * @api
+     *
+     * @return IiifResourceInterface|null
      */
-    public function getIiif(): IiifResourceInterface
+    public function getIiif(): ?IiifResourceInterface
     {
-        return $this->iiif;
+        if ($this->iiif !== null) {
+            return clone $this->iiif;
+        }
+        return null;
     }
 
     /**
@@ -689,7 +849,7 @@ final class IiifManifest extends AbstractDocument
      */
     protected function init(string $location, array $settings = []): void
     {
-        $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger(static::class);
+        $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger(IiifManifest::class);
         $this->metadataRepository = GeneralUtility::makeInstance(MetadataRepository::class);
         $this->metadataRepository->useStoragePid($this->configPid);
     }
@@ -731,32 +891,10 @@ final class IiifManifest extends AbstractDocument
             $manifest = $this->iiif;
             $canvases = $manifest->getDefaultCanvases();
             foreach ($canvases as $canvas) {
-                if (
-                    !empty($canvas->getSeeAlsoUrlsForFormat("application/alto+xml")) ||
-                    !empty($canvas->getSeeAlsoUrlsForProfile("http://www.loc.gov/standards/alto/"))
-                ) {
+                if ($this->canvasHasAlto($canvas) || $this->canvasHasTextAnnotations($canvas)) {
                     $this->hasFulltextSet = true;
                     $this->hasFulltext = true;
                     return;
-                }
-
-                if ($this->getIndexAnnotations() == 1 && !empty($canvas->getPossibleTextAnnotationContainers(Motivation::PAINTING))) {
-                    foreach ($canvas->getPossibleTextAnnotationContainers(Motivation::PAINTING) as $annotationContainer) {
-                        $textAnnotations = $annotationContainer->getTextAnnotations(Motivation::PAINTING);
-                        if ($textAnnotations != null) {
-                            foreach ($textAnnotations as $annotation) {
-                                if (
-                                    $annotation->getBody() != null &&
-                                    $annotation->getBody()->getFormat() == "text/plain" &&
-                                    $annotation->getBody()->getChars() != null
-                                ) {
-                                    $this->hasFulltextSet = true;
-                                    $this->hasFulltext = true;
-                                    return;
-                                }
-                            }
-                        }
-                    }
                 }
             }
             $this->hasFulltextSet = true;
@@ -764,24 +902,60 @@ final class IiifManifest extends AbstractDocument
     }
 
     /**
-     * @see AbstractDocument::magicGetThumbnail()
+     * Check whether a canvas links to ALTO fulltext (seeAlso entries).
+     *
+     * @access private
+     *
+     * @param CanvasInterface $canvas
+     *
+     * @return bool
      */
-    protected function magicGetThumbnail(): string
+    private function canvasHasAlto(CanvasInterface $canvas): bool
     {
-        return $this->iiif->getThumbnailUrl();
+        if (!empty($canvas->getSeeAlsoUrlsForFormat("application/alto+xml"))) {
+            return true;
+        }
+
+        if (!empty($canvas->getSeeAlsoUrlsForProfile("http://www.loc.gov/standards/alto/"))) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
-     * @see AbstractDocument::getToplevelId()
+     * Check whether a canvas contains suitable text/plain annotations.
+     *
+     * @access private
+     *
+     * @param CanvasInterface $canvas
+     *
+     * @return bool
      */
-    public function getToplevelId(): string
+    private function canvasHasTextAnnotations(CanvasInterface $canvas): bool
     {
-        if (empty($this->toplevelId)) {
-            if (isset($this->iiif)) {
-                $this->toplevelId = $this->iiif->getId();
+        $annotationContainers = $canvas->getPossibleTextAnnotationContainers(Motivation::PAINTING);
+        if ($this->getIndexAnnotations() != 1 || empty($annotationContainers)) {
+            return false;
+        }
+
+        foreach ($annotationContainers as $annotationContainer) {
+            $textAnnotations = $annotationContainer->getTextAnnotations(Motivation::PAINTING);
+            if ($textAnnotations != null) {
+                foreach ($textAnnotations as $annotation) {
+                    $body = $annotation->getBody();
+                    if (
+                        $body != null &&
+                        $body->getFormat() == "text/plain" &&
+                        $body->getChars() != null
+                    ) {
+                        return true;
+                    }
+                }
             }
         }
-        return $this->toplevelId;
+
+        return false;
     }
 
     /**
@@ -801,11 +975,12 @@ final class IiifManifest extends AbstractDocument
             /** @var AnnotationContainerInterface $annotationContainer */
             $annotationContainer = $this->iiif->getContainedResourceById($annotationListId);
             foreach ($annotationContainer->getTextAnnotations(Motivation::PAINTING) as $annotation) {
+                $body = $annotation->getBody();
                 if (
                     $annotation->getTargetResourceId() == $iiifId &&
-                    $annotation->getBody() != null && $annotation->getBody()->getChars() != null
+                    $body != null && $body->getChars() != null
                 ) {
-                    $annotationTexts[] = $annotation->getBody()->getChars();
+                    $annotationTexts[] = $body->getChars();
                 }
             }
         }
@@ -817,7 +992,7 @@ final class IiifManifest extends AbstractDocument
      *
      * @access private
      *
-     * @return integer value 0 or 1
+     * @return int value 0 or 1
      */
     private function getIndexAnnotations(): int
     {
@@ -906,5 +1081,82 @@ final class IiifManifest extends AbstractDocument
         $jsonArray = $this->iiif->getOriginalJsonArray();
         $this->asJson = json_encode($jsonArray) ?: '';
         return ['configPid', 'recordId', 'parentId', 'useGroupsConfiguration', 'asJson'];
+    }
+
+    // magic methods inherited from AbstractDocument
+
+    /**
+     * @see AbstractDocument::magicGetPhysicalStructure()
+     */
+    protected function magicGetPhysicalStructure(): array
+    {
+        if ($this->physicalStructureLoaded) {
+            return $this->physicalStructure;
+        }
+
+        if (!($this->iiif instanceof ManifestInterface)) {
+            return [];
+        }
+
+        $iiifId = $this->iiif->getId();
+        $this->initializeManifestStructure($iiifId);
+
+        $this->setFileUseDownload($iiifId, $this->iiif);
+        $this->setFileUseFulltext($iiifId, $this->iiif);
+
+        $canvases = $this->iiif->getDefaultCanvases();
+        if (!empty($canvases)) {
+            $elements = [];
+            $canvasOrder = 0;
+
+            $fileUseThumbs = $this->useGroupsConfiguration->getThumbnail();
+            $fileUses = $this->useGroupsConfiguration->getImage();
+
+            foreach ($canvases as $canvas) {
+                $canvasOrder++;
+                $canvasId = $canvas->getId();
+                $elements[$canvasOrder] = $canvasId;
+
+                $this->processCanvas($iiifId, $canvasId, $canvas, $fileUseThumbs, $fileUses);
+            }
+
+            $this->numPages = $canvasOrder;
+            array_unshift($elements, $iiifId);
+            $this->physicalStructure = $elements;
+        }
+
+        $this->physicalStructureLoaded = true;
+        return $this->physicalStructure;
+    }
+
+    /**
+     * @see AbstractDocument::magicGetSmLinks()
+     */
+    protected function magicGetSmLinks(): array
+    {
+        if (!$this->smLinksLoaded && $this->iiif instanceof ManifestInterface) {
+            $canvases = $this->iiif->getDefaultCanvases();
+            if (!empty($canvases)) {
+                foreach ($canvases as $canvas) {
+                    $this->smLinkCanvasToResource($canvas, $this->iiif);
+                }
+            }
+            $structures = $this->iiif->getStructures();
+            if (!empty($structures)) {
+                foreach ($structures as $range) {
+                    $this->smLinkRangeCanvasesRecursively($range);
+                }
+            }
+            $this->smLinksLoaded = true;
+        }
+        return $this->smLinks;
+    }
+
+    /**
+     * @see AbstractDocument::magicGetThumbnail()
+     */
+    protected function magicGetThumbnail(): string
+    {
+        return $this->iiif->getThumbnailUrl();
     }
 }

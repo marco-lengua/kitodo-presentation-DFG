@@ -11,8 +11,9 @@
     LICENSE.txt file that was distributed with this source code.
 </f:comment>
 
-<f:variable name="navigationPage" value="{numPages - requestData.double}" />
-
-<f:render partial="Navigation/Page" arguments="{class: 'tx-dlf-navigation-last', condition: pageLastActive, navigationPage: navigationPage, value: 'navigation.page.lastPage', requestData: requestData}" />
-
-</html>
+<f:if condition="{solrError}">
+    <div class="tx-dlf-listview">
+        <h2 class="tx-dlf-listview-label">{f:translate(key: 'collection.solr.error')}</h2>
+        <div class="tx-dlf-collection-description">{f:translate(key: 'collection.solr.errorDescription')}</div>
+    </div>
+</f:if>

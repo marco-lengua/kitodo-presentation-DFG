@@ -80,24 +80,23 @@ class CollectionController extends AbstractController
     {
         $solr = $this->getSolr();
         if (!$solr) {
+            $this->view->assign('solrError', true);
             return $this->htmlResponse();
         }
+
+        $this->sanitizeSettings();
 
         $this->collectionRepository->useStoragePid($this->settings['storagePid']);
         $this->metadataRepository->useStoragePid($this->settings['storagePid']);
 
-        // Sort collections according to order in plugin flexform configuration
-        if ($this->settings['collections']) {
-            $sortedCollections = [];
-            foreach (GeneralUtility::intExplode(',', $this->settings['collections']) as $uid) {
-                $sortedCollections[$uid] = $this->collectionRepository->findByUid($uid);
-            }
-            $collections = $sortedCollections;
-        } else {
-            $collections = $this->collectionRepository->findAll();
+        if ($this->settings['showSingle']) {
+            $uid = GeneralUtility::intExplode(',', $this->settings['collections']);
+            return $this->redirect('show', null, null, ['collection' => $this->collectionRepository->findByUid($uid[0])]);
         }
 
-        if (iterator_count($collections) == 1 && empty($this->settings['showSingle']) && is_array($collections)) {
+        $collections = $this->getCollections();
+
+        if (iterator_count($collections) == 1 && is_array($collections)) {
             return $this->redirect('show', null, null, ['collection' => array_pop($collections)]);
         }
 
@@ -129,56 +128,38 @@ class CollectionController extends AbstractController
 
         $solr = $this->getSolr();
         if (!$solr) {
+            $this->view->assign('solrError', true);
             return $this->htmlResponse();
         }
 
-        // Pagination of Results: Pass the currentPage to the fluid template to calculate current index of search result.
-        $currentPage = $this->getIntParameterSafely('page');
-        if ($currentPage == 0) {
-            $currentPage = 1;
+        if ($this->settings['showOverview']) {
+            $this->view->assign('collection', $collection);
         }
 
-        $search['collection'] = $collection->getUid();
-        // If a targetPid is given, the results will be shown by ListView on the target page.
-        if (!empty($this->settings['targetPid'])) {
-            return $this->redirect(
-                'main',
-                'ListView',
-                null,
-                [
-                    'search' => $search,
-                    'page' => $currentPage
-                ],
-                $this->settings['targetPid']
-            );
+        if ($this->settings['showDocuments']) {
+            // Pagination of Results: Pass the currentPage to the fluid template to calculate current index of search result.
+            $currentPage = $this->getIntParameterSafely('page');
+            if ($currentPage == 0) {
+                $currentPage = 1;
+            }
+
+            $search['collection'] = $collection->getUid();
+            // If a targetPid is given, the results will be shown by ListView on the target page.
+            if (!empty($this->settings['targetPid'])) {
+                return $this->redirect(
+                    'main',
+                    'ListView',
+                    null,
+                    [
+                        'search' => $search,
+                        'page' => $currentPage
+                    ],
+                    $this->settings['targetPid']
+                );
+            }
+
+            $this->showDocuments($collection, $search, $currentPage);
         }
-
-        // get all metadata records to be shown in results
-        $listedMetadata = $this->metadataRepository->findBy(['isListed' => true]);
-
-        // get all indexed metadata fields
-        $indexedMetadata = $this->metadataRepository->findBy(['indexIndexed' => true]);
-
-        // get all sortable metadata records
-        $sortableMetadata = $this->metadataRepository->findBy(['isSortable' => true]);
-
-        // get all documents of given collection
-        $solrResults = $this->documentRepository->findSolrByCollection($collection, $this->settings, $search, $listedMetadata, $indexedMetadata);
-
-        $itemsPerPage = $this->settings['list']['paginate']['itemsPerPage'] ?? 25;
-        $solrPaginator = new SolrPaginator($solrResults, $currentPage, $itemsPerPage);
-        $simplePagination = new SimplePagination($solrPaginator);
-
-        $pagination = $this->buildSimplePagination($simplePagination, $solrPaginator);
-        $this->view->assignMultiple([ 'pagination' => $pagination, 'paginator' => $solrPaginator ]);
-
-        $this->view->assign('viewData', $this->viewData);
-        $this->view->assign('documents', $solrResults);
-        $this->view->assign('collection', $collection);
-        $this->view->assign('page', $currentPage);
-        $this->view->assign('lastSearch', $search);
-        $this->view->assign('sortableMetadata', $sortableMetadata);
-        $this->view->assign('listedMetadata', $listedMetadata);
 
         return $this->htmlResponse();
     }
@@ -215,6 +196,27 @@ class CollectionController extends AbstractController
     }
 
     /**
+     * Get collections.
+     *
+     * @access private
+     *
+     * @return array<int, Collection>|QueryResultInterface<int, Collection>
+     */
+    private function getCollections(): array|QueryResultInterface
+    {
+        // Sort collections according to order in plugin FlexForm configuration
+        if ($this->settings['collections']) {
+            $sortedCollections = [];
+            foreach (GeneralUtility::intExplode(',', $this->settings['collections']) as $uid) {
+                $sortedCollections[$uid] = $this->collectionRepository->findByUid($uid);
+            }
+            return $sortedCollections;
+        }
+
+        return $this->collectionRepository->findAll();
+    }
+
+    /**
      * Processes collections for displaying in the frontend.
      *
      * @access private
@@ -224,7 +226,7 @@ class CollectionController extends AbstractController
      *
      * @return array<int,array{collection:Collection,info:array<string,mixed>}> Processed collections keyed by priority-based integer
      */
-    private function processCollections(array$collections, Solr $solr): array
+    private function processCollections(array $collections, Solr $solr): array
     {
         $processedCollections = [];
 
@@ -286,5 +288,50 @@ class CollectionController extends AbstractController
         }
 
         return $processedCollections;
+    }
+
+    /**
+     * Show documents for the given collection.
+     *
+     * @access private
+     *
+     * @param Collection $collection
+     * @param mixed[] $search
+     * @param int $currentPage
+     *
+     * @return void
+     */
+    private function showDocuments(Collection $collection, array $search, int $currentPage): void
+    {
+        // get all metadata records to be shown in results
+        $listedMetadata = $this->metadataRepository->findBy(['isListed' => true]);
+
+        // get all indexed metadata fields
+        $indexedMetadata = $this->metadataRepository->findBy(['indexIndexed' => true]);
+
+        // get all sortable metadata records
+        $sortableMetadata = $this->metadataRepository->findBy(['isSortable' => true]);
+
+        // get all documents of given collection
+        $solrResults = $this->documentRepository->findSolrByCollection($collection, $this->settings, $search, $listedMetadata, $indexedMetadata);
+
+        $itemsPerPage = $this->settings['list']['paginate']['itemsPerPage'] ?? 25;
+        $solrPaginator = new SolrPaginator($solrResults, $currentPage, $itemsPerPage);
+        $simplePagination = new SimplePagination($solrPaginator);
+
+        $pagination = $this->buildSimplePagination($simplePagination, $solrPaginator);
+        $this->view->assignMultiple(
+            [
+                'documents' => $solrResults,
+                'page' => $currentPage,
+                'pagination' => $pagination,
+                'paginator' => $solrPaginator,
+                'lastSearch' => $search,
+                'listedMetadata' => $listedMetadata,
+                'sortableMetadata' => $sortableMetadata,
+                'requestData' => $this->requestData,
+                'uniqueId' => $this->uniqueId
+            ]
+        );
     }
 }
