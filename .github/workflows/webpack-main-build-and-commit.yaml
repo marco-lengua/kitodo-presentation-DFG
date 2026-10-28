@@ -3,7 +3,7 @@ description: 'This workflow triggers a Node.js build on push or manually: it rea
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "7.x" ]
   workflow_dispatch:
 
 jobs:
@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js from .nvmrc
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: 'Build/.nvmrc'
 

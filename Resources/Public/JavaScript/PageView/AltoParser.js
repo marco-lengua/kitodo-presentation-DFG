@@ -8,6 +8,8 @@
  * LICENSE.txt file that was distributed with this source code.
  */
 
+/* global dlfUtils, ol */
+
 /**
  * @typedef {ol.Feature & {
  *  getStringFeatures: () => any[];
@@ -93,10 +95,12 @@ dlfAltoParser.prototype.parseAltoFeature_ = function(node) {
     }
 
     // parse child nodes
+    var width;
+    var height;
     if (type === 'page') {
         // try to update the general width and height for rescaling
-        var width = feature.get('width'),
-            height = feature.get('height');
+        width = feature.get('width');
+        height = feature.get('height');
 
         if (dlfUtils.exists(width) && dlfUtils.exists(height) && !dlfUtils.exists(this.width_) && !dlfUtils.exists(this.height_)) {
             this.width_ = width;
@@ -107,8 +111,8 @@ dlfAltoParser.prototype.parseAltoFeature_ = function(node) {
         feature.setProperties({'printspace': this.parsePrintSpaceFeature_(node)});
     } else if (type === 'printspace') {
         // try to update the general width and height for rescaling
-        var width = feature.get('width'),
-            height = feature.get('height');
+        width = feature.get('width');
+        height = feature.get('height');
 
         if (dlfUtils.exists(width) && dlfUtils.exists(height) && !dlfUtils.exists(this.width_) && !dlfUtils.exists(this.height_)) {
             this.width_ = width;

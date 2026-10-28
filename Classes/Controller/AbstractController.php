@@ -95,15 +95,15 @@ abstract class AbstractController extends ActionController implements LoggerAwar
 
     /**
      * @access protected
-     * @var mixed[] This holds some common data for the fluid view
+     * @var string This holds the unique id for the fluid view
      */
-    protected array $viewData;
+    protected string $uniqueId;
 
     /**
      * @access protected
      * @var int This holds the current page UID (only in frontend context)
      */
-    protected int $pageUid;
+    protected int $pageUid = 0;
 
     /**
      * Holds the configured useGroups as array.
@@ -141,18 +141,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
 
         $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger(__CLASS__);
 
-        $this->viewData = [
-            'pageUid' => $this->pageUid ?? 0,
-            'uniqueId' => uniqid(),
-            'requestData' => $this->requestData
-        ];
-
-        try {
-            $this->viewData['publicResourcePath'] = PathUtility::getPublicResourceWebPath('EXT:dlf/Resources/Public');
-        } catch (InvalidFileException) {
-            $this->logger->warning('Public resource path of the dlf extension could not be determined');
-        }
-
+        $this->uniqueId = uniqid();
     }
 
     /**
@@ -197,7 +186,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
     public function isMultiDocumentType(string $type): bool
     {
         $multiViewPluginConfig = $this->getMultiViewPluginConfig();
-        if (!$multiViewPluginConfig !== null
+        if ($multiViewPluginConfig !== null
             && !empty($multiViewPluginConfig['settings.'])
             && !empty($multiViewPluginConfig['settings.']['multiDocumentTypes'])
         ) {
@@ -239,7 +228,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
                 $this->addMultiViewDocument($document['points']);
             }
         } else {
-            $this->addMultiViewDocument($docUrl, $this->requestData['page']);
+            $this->addMultiViewDocument($docUrl, (int) $this->requestData['page']);
         }
         if (isset($this->requestData['multiViewSource']) && is_array($this->requestData['multiViewSource'])) {
             foreach ($this->requestData['multiViewSource'] as $sourceKey => $documentUrl) {
@@ -319,12 +308,12 @@ abstract class AbstractController extends ActionController implements LoggerAwar
      */
     protected function configureProxyUrl(string &$url): void
     {
-        $this->uriBuilder->reset()
+        $url = $this->uriBuilder->reset()
             ->setTargetPageUid($this->pageUid)
             ->setCreateAbsoluteUri(!empty($this->extConf['general']['forceAbsoluteUrl']))
             ->setArguments(
                 [
-                    'eID' => 'tx_dlf_pageview_proxy',
+                    'middleware' => 'dlf/page-view-proxy',
                     'url' => $url,
                     'uHash' => GeneralUtility::hmac($url, 'PageViewProxy')
                 ]
@@ -369,18 +358,6 @@ abstract class AbstractController extends ActionController implements LoggerAwar
     }
 
     /**
-     * Returns the LanguageService
-     *
-     * @access protected
-     *
-     * @return LanguageService
-     */
-    protected function getLanguageService(): LanguageService
-    {
-        return $GLOBALS['LANG'];
-    }
-
-    /**
      * Gets SOLR instance by its UID configured in the plugin or extension.
      *
      * @access protected
@@ -408,7 +385,7 @@ abstract class AbstractController extends ActionController implements LoggerAwar
     }
 
     /**
-     * Safely gets integer parameters from request if they exist, otherwise returns 0.
+     * Safely gets array parameters from request if they exist, otherwise returns empty array.
      *
      * @access protected
      *
@@ -655,9 +632,6 @@ abstract class AbstractController extends ActionController implements LoggerAwar
         }
 
         $this->requestData['page'] = MathUtility::forceIntegerInRange($this->requestData['page'], 1, $this->document->getCurrentDocument()->numPages, 1);
-
-        // reassign viewData to get correct page
-        $this->viewData['requestData'] = $this->requestData;
     }
 
     /**

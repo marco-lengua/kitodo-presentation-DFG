@@ -10,6 +10,8 @@ general.forceAbsoluteUrl = 0
 general.forceAbsoluteUrlHttps = 0
 # cat=General; type=boolean; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.general.caching
 general.caching = 0
+# cat=General; type=int[0-86400]; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.general.failCacheLifetime
+general.failCacheLifetime = 300
 # cat=General; type=boolean; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.general.publishNewCollections
 general.publishNewCollections = 1
 # cat=General; type=boolean; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.general.unhideOnIndex
@@ -74,6 +76,10 @@ solr.fields.partof = partof
 solr.fields.root = root
 # cat=Solr; type=string; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.solr.fields.sid
 solr.fields.sid = sid
+# cat=Solr; type=string; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.solr.fields.logicalId
+solr.fields.logicalId = logical_id
+# cat=Solr; type=string; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.solr.fields.physicalId
+solr.fields.physicalId = physical_id
 # cat=Solr; type=string; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.solr.fields.toplevel
 solr.fields.toplevel = toplevel
 # cat=Solr; type=string; label=LLL:EXT:dlf/Resources/Private/Language/locallang_labels.xlf:config.solr.fields.type

@@ -8,6 +8,8 @@
  * LICENSE.txt file that was distributed with this source code.
  */
 
+/* global dlfUtils, dlfViewerOLStyles, ol */
+
 /**
  * This is necessary to support the scrolling of the element into the viewport
  * in case of text hover on the map.
@@ -44,9 +46,17 @@ var dlfFulltextSegments = function () {
  */
 dlfFulltextSegments.prototype.populate = function (features) {
     for (let feature of features) {
+        // Some ALTO documents contain placeholder text blocks / lines without
+        // coordinates, which parse to features without a geometry. Skip those:
+        // a feature without a geometry cannot be hit-tested, and calling
+        // getExtent() on it would throw and abort the whole fulltext load.
+        var geometry = feature.getGeometry();
+        if (geometry === undefined) {
+            continue;
+        }
         this.segments_.push({
             feature,
-            extent: feature.getGeometry().getExtent()
+            extent: geometry.getExtent()
         });
     }
 };
@@ -63,6 +73,21 @@ dlfFulltextSegments.prototype.coordinateToFeature = function (coordinate) {
             return segment.feature;
         }
     }
+};
+
+/**
+ * Returns the feature with the given {@link id}, or `undefined` if no such feature is found.
+ *
+ * @param {string} id
+ * @returns {ol.Feature | undefined}
+ */
+dlfFulltextSegments.prototype.getFeatureById = function (id) {
+    for (let segment of this.segments_) {
+        if (String(segment.feature.getId()) === String(id)) {
+            return segment.feature;
+        }
+    }
+    return undefined;
 };
 
 /**
@@ -93,6 +118,7 @@ var dlfViewerFullTextControl = function(map) {
         {
             'fulltext':'Fulltext',
             'fulltext-loading':'Loading full text...',
+            'fulltext-missing':'Fulltext not available for this page',
             'fulltext-on':'Activate Fulltext',
             'fulltext-off':'Deactivate Fulltext',
             'activate-full-text-initially':'0',
@@ -242,6 +268,20 @@ var dlfViewerFullTextControl = function(map) {
                 this.handleTextBlockElements(textblockFeature, selectSource_, hoverSourceTextblock_);
                 this.handleTextLineElements(textlineFeature, hoverSourceTextline_);
             },
+        this),
+        fulltextHover: $.proxy(function(event) {
+                // hover on the fulltext: highlight the corresponding textline in the image
+                let textlineEl = $(event.target).closest('.textline');
+                let textlineFeature = textlineEl.length > 0 ?
+                    this.textlines_.getFeatureById(textlineEl.attr('id')) :
+                    undefined;
+                this.handleFulltextHoverElements(textlineFeature, textlineEl);
+            },
+        this),
+        fulltextMouseLeave: $.proxy(function() {
+                // leave of the fulltext: remove the textline highlight from the image
+                this.handleFulltextHoverElements(undefined, undefined);
+            },
         this)
     };
 
@@ -271,7 +311,12 @@ dlfViewerFullTextControl.prototype.getFullTextScrollElementId = function() {
 dlfViewerFullTextControl.prototype.loadFulltextData = function (fulltextData) {
 
     if(dlfUtils.exists(fulltextData.type) && fulltextData.type == 'tei') {
-      document.getElementById(this.getFullTextScrollElementId()).innerHTML = fulltextData.fulltext;
+      // getElementById('') (no scroll element configured) returns null, so guard
+      // the dereference to avoid a TypeError and a browser warning.
+      let teiTarget = document.getElementById(this.getFullTextScrollElementId());
+      if (teiTarget !== null) {
+        teiTarget.innerHTML = fulltextData.fulltext;
+      }
       return;
     }
     // add features to fulltext layer
@@ -364,8 +409,7 @@ dlfViewerFullTextControl.prototype.addActiveBehaviourForSwitchOff = function() {
  * Recalculate position of text lines if full text container was resized
  */
 dlfViewerFullTextControl.prototype.onResize = function() {
-    if (this.element != undefined && this.element.css('width') != this.lastHeight) {
-        this.lastHeight = this.element.css('width');
+    if (this.element != undefined) {
         this.calculatePositions();
     }
 };
@@ -379,11 +423,16 @@ dlfViewerFullTextControl.prototype.calculatePositions = function() {
     let texts = $('html').find(this.fullTextScrollElement).children('span.textline');
     // check if fulltext exists for this page
     if (texts.length > 0) {
-        let offset = $('#' + texts[0].id).position().top;
+        // .position() is relative to the nearest positioned ancestor, not the
+        // scroller, so the offsets were wrong once the lines became block
+        // elements. .offset() is viewport-based, so subtracting the scroller's
+        // own offset gives the position within the scrollable content even
+        // when the scroller is itself nested inside a positioned container.
+        let containerOffset = $(this.fullTextScrollElement).offset().top;
 
         for(let text of texts) {
-            let pos = $('#' + text.id).position().top;
-            this.positions[text.id] = pos - offset;
+            let pos = $('#' + text.id).offset().top;
+            this.positions[text.id] = pos - containerOffset;
         }
     }
 };
@@ -447,6 +496,38 @@ dlfViewerFullTextControl.prototype.handleTextLineElements = function(textlineFea
 };
 
 /**
+ * Handle TextLine elements for hover in the fulltext view:
+ * highlight the corresponding textline in the image
+ * @param {ol.Feature|undefined} textlineFeature
+ * @param {JQuery|undefined} textlineElement
+ */
+dlfViewerFullTextControl.prototype.handleFulltextHoverElements = function(textlineFeature, textlineElement) {
+    let hoverSourceTextline_ = this.layers_.hoverTextline.getSource(),
+        activeHoverTextlineEl_ = dlfFullTextUtils.getFeature(hoverSourceTextline_),
+        isFeatureEqualToOldHoverFeature_ = dlfFullTextUtils.isFeatureEqual(activeHoverTextlineEl_, textlineFeature);
+
+    if (!isFeatureEqualToOldHoverFeature_) {
+        // remove old textline hover features
+        if (activeHoverTextlineEl_) {
+            let oldTargetElem = $('#' + activeHoverTextlineEl_.getId());
+
+            if (oldTargetElem.hasClass('highlight')) {
+                oldTargetElem.removeClass('highlight');
+            }
+            hoverSourceTextline_.clear();
+        }
+
+        if (textlineFeature) {
+            hoverSourceTextline_.addFeature(textlineFeature);
+
+            if (textlineElement && !textlineElement.hasClass('highlight')) {
+                textlineElement.addClass('highlight');
+            }
+        }
+    }
+};
+
+/**
  * Remove highlight effect from full text view
  * @param {ol.Feature|undefined} activeHoverTextBlockEl_
  * @param {any} hoverSourceTextline_
@@ -489,8 +570,12 @@ dlfViewerFullTextControl.prototype.addHighlightEffect = function(textlineFeature
  */
 dlfViewerFullTextControl.prototype.scrollToText = function(element, fullTextScrollElement, positions) {
     if (element.hasClass('highlight')) {
+        let target = positions[element[0].id];
+        if (target === undefined) {
+            return;
+        }
         $(fullTextScrollElement).animate({
-            scrollTop: positions[element[0].id]
+            scrollTop: target
         }, 500);
     }
 };
@@ -541,6 +626,8 @@ dlfViewerFullTextControl.prototype.disableFulltextSelect = function() {
     // register event listeners
     this.map.un('click', this.handlers_.mapClick);
     this.map.un('pointermove', this.handlers_.mapHover);
+    $(this.fullTextScrollElement).off('mouseover', '.textline', this.handlers_.fulltextHover);
+    $(this.fullTextScrollElement).off('mouseleave', this.handlers_.fulltextMouseLeave);
 
     // remove layers
     for (let key in this.layers_) {
@@ -570,6 +657,8 @@ dlfViewerFullTextControl.prototype.enableFulltextSelect = function() {
     // register event listeners
     this.map.on('click', this.handlers_.mapClick);
     this.map.on('pointermove', this.handlers_.mapHover);
+    $(this.fullTextScrollElement).on('mouseover', '.textline', this.handlers_.fulltextHover);
+    $(this.fullTextScrollElement).on('mouseleave', this.handlers_.fulltextMouseLeave);
 
     // add layers to map
     for (let key in this.layers_) {
@@ -609,7 +698,12 @@ dlfTmplFulltext.space.className = "sp";
  * @param {array.<ol.Feature>|undefined} features
  */
 dlfViewerFullTextControl.prototype.showFulltext = function(features) {
+    let target = document.getElementById(this.getFullTextScrollElementId());
+
     if (features === undefined) {
+        if (target !== null) {
+            target.innerHTML = this.dic['fulltext-missing'];
+        }
         return;
     }
 
@@ -620,7 +714,6 @@ dlfViewerFullTextControl.prototype.showFulltext = function(features) {
         return;
     }
 
-    let target = document.getElementById(this.getFullTextScrollElementId());
     if (target !== null) {
         target.innerHTML = "";
         for (let feature of features) {

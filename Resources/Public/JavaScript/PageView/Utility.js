@@ -10,6 +10,8 @@
  * LICENSE.txt file that was distributed with this source code.
  */
 
+/* global dlfViewerSource, ol */
+
 // Internet Explorer does not support String.prototype.endsWith
 if (String.prototype.endsWith === undefined) {
     String.prototype.endsWith = function(searchString, length) {
@@ -258,7 +260,11 @@ dlfUtils.fetchImageData = function (imageSourceObjs, loadingIndicator) {
         if (loadCount === imageSourceObjs.length) {
             deferredResponse.resolve(imageSourceData);
         }
-    };
+    },
+        failLoading = function failLoading() {
+            // At least one image could not be loaded; stop and report the error.
+            deferredResponse.reject();
+        };
 
     imageSourceObjs.forEach(function (imageSourceObj, index) {
         if (imageSourceObj.mimetype === dlfUtils.CUSTOM_MIMETYPE.ZOOMIFY) {
@@ -266,26 +272,30 @@ dlfUtils.fetchImageData = function (imageSourceObjs, loadingIndicator) {
                 .done(function (imageSourceDataObj) {
                     imageSourceData[index] = imageSourceDataObj;
                     finishLoading();
-            });
+            })
+                .fail(failLoading);
         } else if (imageSourceObj.mimetype === dlfUtils.CUSTOM_MIMETYPE.IIIF) {
             dlfUtils.getIIIFResource(imageSourceObj)
                 .done(function (imageSourceDataObj) {
                     imageSourceData[index] = imageSourceDataObj;
                       finishLoading();
-            });
+            })
+                .fail(failLoading);
         } else if (imageSourceObj.mimetype === dlfUtils.CUSTOM_MIMETYPE.IIP) {
             dlfUtils.fetchIIPData(imageSourceObj)
                 .done(function (imageSourceDataObj) {
                     imageSourceData[index] = imageSourceDataObj;
                     finishLoading();
-            });
+            })
+                .fail(failLoading);
         } else {
             // In the worse case expect static image file
             dlfUtils.fetchStaticImageData(imageSourceObj, loadingIndicator)
                 .done(function (imageSourceDataObj) {
                     imageSourceData[index] = imageSourceDataObj;
                     finishLoading();
-            });
+            })
+                .fail(failLoading);
         }
     });
 
@@ -400,6 +410,7 @@ dlfUtils.fetchStaticImageData = function (imageSourceObj, loadingIndicator) {
         makeImage(imageSourceObj.url, imageSourceObj.mimetype);
     };
     xhr.open('GET', imageSourceObj.url);
+    xhr.withCredentials = true;
     xhr.send();
 
     return deferredResponse;
@@ -413,11 +424,6 @@ dlfUtils.getIIIFResource = function getIIIFResource(imageSourceObj) {
 
     var deferredResponse = new $.Deferred();
     var type = 'GET';
-    $.ajax({
-        url: dlfViewerSource.IIIF.getMetdadataURL(imageSourceObj.url),
-        type,
-        dataType: 'json'
-    }).done(cb);
 
     function cb(data) {
         var format = new ol.format.IIIFInfo(data);
@@ -434,6 +440,15 @@ dlfUtils.getIIIFResource = function getIIIFResource(imageSourceObj) {
             });
         }
     }
+
+    $.ajax({
+        url: dlfViewerSource.IIIF.getMetdadataURL(imageSourceObj.url),
+        type,
+        dataType: 'json',
+        xhrFields: {
+            withCredentials: true
+        }
+    }).done(cb);
 
     return deferredResponse;
 };

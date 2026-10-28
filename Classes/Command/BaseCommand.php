@@ -93,8 +93,9 @@ class BaseCommand extends Command
         DocumentRepository $documentRepository,
         LibraryRepository $libraryRepository,
         SolrCoreRepository $solrCoreRepository,
-        StructureRepository $structureRepository,
-    ) {
+        StructureRepository $structureRepository
+    )
+    {
         parent::__construct();
 
         $this->collectionRepository = $collectionRepository;
@@ -136,11 +137,11 @@ class BaseCommand extends Command
     protected function getSolrCoreUid(array $solrCores, bool|string|null $inputSolrId): ?int
     {
         if (MathUtility::canBeInterpretedAsInteger($inputSolrId)) {
-            $solrCoreUid = MathUtility::forceIntegerInRange((int) $inputSolrId, 0);
-        } else {
-            $solrCoreUid = $solrCores[$inputSolrId];
+            return MathUtility::forceIntegerInRange((int) $inputSolrId, 0);
+        } elseif (is_string($inputSolrId) && array_key_exists($inputSolrId, $solrCores)) {
+            return $solrCores[$inputSolrId];
         }
-        return $solrCoreUid;
+        return null;
     }
 
     /**
@@ -214,10 +215,10 @@ class BaseCommand extends Command
             // set title data
             $document->setTitle($metadata['title'][0] ?? '');
             $document->setTitleSorting($metadata['title_sorting'][0] ?? '');
-            $document->setPlace(implode('; ', $metadata['place'] ?? []));
+            $document->setPlace($this->shortenValue($metadata['place'] ?? []));
             $document->setYear(implode('; ', $metadata['year'] ?? []));
             $document->setAuthor($this->getAuthors($metadata['author'] ?? []));
-            $document->setThumbnail($doc->thumbnail ?? '');
+            $document->setThumbnail($doc->thumbnail);
             $document->setMetsLabel($metadata['mets_label'][0] ?? '');
             $document->setMetsOrderlabel($metadata['mets_orderlabel'][0] ?? '');
 
@@ -446,26 +447,39 @@ class BaseCommand extends Command
             }
         }
 
-        $authors = '';
+        return $this->shortenValue($metadataAuthor);
+    }
+
+    /**
+     * Shorten the value to a maximum length, adding an ellipsis if necessary.
+     *
+     * @access private
+     *
+     * @param array<int, string> $values The values to shorten
+     *
+     * @return string The shortened value
+     */
+    private function shortenValue(array $values): string
+    {
+        $value = '';
         $delimiter = '; ';
         $ellipsis = 'et al.';
 
-        $count = count($metadataAuthor);
+        $count = count($values);
 
         for ($i = 0; $i < $count; $i++) {
             // Build the next part to add
-            $nextPart = ($i === 0 ? '' : $delimiter) . $metadataAuthor[$i];
+            $nextPart = ($i === 0 ? '' : $delimiter) . $values[$i];
             // Check if adding this part and ellipsis in future would exceed the character limit
-            if (strlen($authors . $nextPart . $delimiter . $ellipsis) > 255) {
-                // Add ellipsis and stop adding more authors
-                $authors .= $delimiter . $ellipsis;
+            if (strlen($value . $nextPart . $delimiter . $ellipsis) > 255) {
+                // Add ellipsis and stop adding more values
+                $value .= $delimiter . $ellipsis;
                 break;
             }
             // Add the part to the main string
-            $authors .= $nextPart;
+            $value .= $nextPart;
         }
-
-        return $authors;
+        return $value;
     }
 
     /**

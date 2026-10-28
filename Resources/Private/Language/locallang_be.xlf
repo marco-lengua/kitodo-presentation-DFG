@@ -56,8 +56,14 @@
             <trans-unit id="collection.flexForm.randomize">
                 <source><![CDATA[Randomize sorting?]]></source>
             </trans-unit>
+            <trans-unit id="collection.flexForm.showDocuments">
+                <source><![CDATA[Show documents in the single collection view?]]></source>
+            </trans-unit>
+            <trans-unit id="collection.flexForm.showOverview">
+                <source><![CDATA[Show overview in the single collection view?]]></source>
+            </trans-unit>
             <trans-unit id="collection.flexForm.showSingle">
-                <source><![CDATA[Show single collection in overview?]]></source>
+                <source><![CDATA[Show the single collection in the single collection view?]]></source>
             </trans-unit>
             <trans-unit id="collection.flexForm.showUserDefined">
                 <source><![CDATA[Show user-defined collections?]]></source>
@@ -509,17 +515,17 @@
             <trans-unit id="toolbox.plugin.title">
                 <source><![CDATA[Kitodo: Toolbox]]></source>
             </trans-unit>
-            <trans-unit id="validationForm.flexForm.type.description">
+            <trans-unit id="validation.flexForm.type.description">
                 <source><![CDATA[Validation configuration type for DOMDocument validation]]></source>
             </trans-unit>
-            <trans-unit id="validationForm.flexForm.type.label">
+            <trans-unit id="validation.flexForm.type.label">
                 <source><![CDATA[Type]]></source>
             </trans-unit>
-            <trans-unit id="validationForm.plugin.description">
-                <source><![CDATA[Validation form for Kitodo.Presentation]]></source>
+            <trans-unit id="validation.plugin.description">
+                <source><![CDATA[Validation Plugin for Kitodo.Presentation]]></source>
             </trans-unit>
-            <trans-unit id="validationForm.plugin.title">
-                <source><![CDATA[Kitodo: Validation Form]]></source>
+            <trans-unit id="validation.plugin.title">
+                <source><![CDATA[Kitodo: Validation]]></source>
             </trans-unit>
         </body>
     </file>

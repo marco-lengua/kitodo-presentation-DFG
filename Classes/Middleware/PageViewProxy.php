@@ -10,12 +10,14 @@
  * LICENSE.txt file that was distributed with this source code.
  */
 
-namespace Kitodo\Dlf\Eid;
+namespace Kitodo\Dlf\Middleware;
 
 use Kitodo\Dlf\Common\Helper;
 use Kitodo\Dlf\Common\StdOutStream;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Http\RequestFactory;
@@ -23,7 +25,7 @@ use TYPO3\CMS\Core\Http\Response;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
- * eID image proxy for plugin 'Page View' of the 'dlf' extension
+ * Image proxy Middleware for plugin 'Page View' of the 'dlf' extension
  *
  * Supported query parameters:
  * - `url` (mandatory): The URL to be proxied
@@ -34,7 +36,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  *
  * @access public
  */
-class PageViewProxy
+class PageViewProxy implements MiddlewareInterface
 {
     /**
      * @access protected
@@ -62,6 +64,76 @@ class PageViewProxy
     }
 
     /**
+     * The process method of the middleware.
+     *
+     * @access public
+     *
+     * @param ServerRequestInterface $request
+     * @param RequestHandlerInterface $handler
+     *
+     * @return ResponseInterface
+     */
+    public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
+    {
+        // Get input parameters
+        $parameters = $request->getQueryParams();
+
+        // Fall back to parsing the URI query string when query params are empty or missing the middleware key
+        $uriQuery = $request->getUri()->getQuery();
+        if ((empty($parameters) || !isset($parameters['middleware'])) && $uriQuery !== '') {
+            parse_str($uriQuery, $parsedQuery);
+            if (is_array($parsedQuery)) {
+                // merge with existing parameters taking precedence from $parameters
+                $parameters = array_merge($parsedQuery, $parameters);
+            }
+        }
+
+        // Ensure downstream handlers can read the parsed query params
+        $request = $request->withQueryParams($parameters);
+
+        // Return if not this middleware
+        if (!isset($parameters['middleware']) || ($parameters['middleware'] != 'dlf/page-view-proxy')) {
+            return $handler->handle($request);
+        }
+
+        return match ($request->getMethod()) {
+            'OPTIONS' => $this->handleOptions($request),
+            'GET' => $this->handleGet($request),
+            'HEAD' => $this->handleHead($request),
+            default => GeneralUtility::makeInstance(Response::class)
+                ->withStatus(405),
+        };
+    }
+
+    /**
+     * Validate the `url` and `uHash` query parameters of a proxy request.
+     *
+     * Both GET and HEAD requests must be authenticated by a valid uHash to
+     * prevent unauthenticated server-side request forgery (SSRF).
+     *
+     * @access protected
+     *
+     * @param mixed[] $queryParams The query parameters of the request
+     *
+     * @return JsonResponse|NULL An error response if the URL or uHash is invalid, NULL otherwise
+     */
+    protected function validateProxyUrl(array $queryParams): ?JsonResponse
+    {
+        $url = (string) ($queryParams['url'] ?? '');
+        if (!Helper::isValidHttpUrl($url)) {
+            return new JsonResponse(['message' => 'Did not receive a valid URL.'], 400);
+        }
+
+        // get and verify the uHash
+        $uHash = (string) ($queryParams['uHash'] ?? '');
+        if (!hash_equals(GeneralUtility::hmac($url, 'PageViewProxy'), $uHash)) {
+            return new JsonResponse(['message' => 'No valid uHash passed!'], 401);
+        }
+
+        return null;
+    }
+
+    /**
      * Return a response that is derived from $response and contains CORS
      * headers to be sent to the client.
      *
@@ -75,7 +147,8 @@ class PageViewProxy
     protected function withCorsResponseHeaders(
         ResponseInterface $response,
         ServerRequestInterface $request
-    ): ResponseInterface {
+    ): ResponseInterface
+    {
         $origin = $request->getHeaderLine('Origin') ?: '*';
 
         return $response
@@ -100,7 +173,8 @@ class PageViewProxy
         ResponseInterface $fromResponse,
         ResponseInterface $toResponse,
         array $headerNames
-    ): ResponseInterface {
+    ): ResponseInterface
+    {
         $result = $toResponse;
 
         foreach ($headerNames as $headerName) {
@@ -144,7 +218,12 @@ class PageViewProxy
     {
         $queryParams = $request->getQueryParams();
 
-        $url = (string) ($queryParams['url'] ?? '');
+        $error = $this->validateProxyUrl($queryParams);
+        if ($error !== null) {
+            return $error;
+        }
+
+        $url = (string) $queryParams['url'];
         try {
             $targetResponse = $this->requestFactory->request($url, 'HEAD', [
                 'headers' => [
@@ -180,16 +259,12 @@ class PageViewProxy
     {
         $queryParams = $request->getQueryParams();
 
-        $url = (string) ($queryParams['url'] ?? '');
-        if (!Helper::isValidHttpUrl($url)) {
-            return new JsonResponse(['message' => 'Did not receive a valid URL.'], 400);
+        $error = $this->validateProxyUrl($queryParams);
+        if ($error !== null) {
+            return $error;
         }
 
-        // get and verify the uHash
-        $uHash = (string) ($queryParams['uHash'] ?? '');
-        if (!hash_equals(GeneralUtility::hmac($url, 'PageViewProxy'), $uHash)) {
-            return new JsonResponse(['message' => 'No valid uHash passed!'], 401);
-        }
+        $url = (string) $queryParams['url'];
         try {
             $targetResponse = $this->requestFactory->request($url, 'GET', [
                 'headers' => [
@@ -222,25 +297,5 @@ class PageViewProxy
         ]);
 
         return $this->withCorsResponseHeaders($clientResponse, $request);
-    }
-
-    /**
-     * The main method of the eID script
-     *
-     * @access public
-     *
-     * @param ServerRequestInterface $request
-     *
-     * @return ResponseInterface
-     */
-    public function main(ServerRequestInterface $request): ResponseInterface
-    {
-        return match ($request->getMethod()) {
-            'OPTIONS' => $this->handleOptions($request),
-            'GET' => $this->handleGet($request),
-            'HEAD' => $this->handleHead($request),
-            default => GeneralUtility::makeInstance(Response::class)
-                ->withStatus(405),
-        };
     }
 }

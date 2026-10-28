@@ -13,6 +13,8 @@
 namespace Kitodo\Dlf\Tests\Functional\Controller;
 
 use Kitodo\Dlf\Controller\PageViewController;
+use PHPUnit\Framework\Attributes\Test;
+use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 
 class PageViewControllerTest extends AbstractControllerTestCase
 {
@@ -31,9 +33,8 @@ class PageViewControllerTest extends AbstractControllerTestCase
     /**
      * This test hard-codes the URL that is used to load the METS of document 2001 (see documents_local.csv).
      * It will fail unless the docker test environment is used with the proxy hosted at "web:8001".
-     *
-     * @test
      */
+    #[Test]
     public function canMainAction()
     {
         $settings = [
@@ -69,5 +70,34 @@ class PageViewControllerTest extends AbstractControllerTestCase
                 });
             </html>';
         $this->assertEquals($expected, $actual);
+    }
+
+    /**
+     * Renders the real PageView template (not a reduced inline template) and asserts that the map
+     * container carries the localized image-load error message used by dlfViewer when the page
+     * image could not be loaded.
+     */
+    #[Test]
+    public function rendersImageErrorAttributeOnMapContainer()
+    {
+        $settings = [
+            'storagePid' => self::$storagePid,
+            'solrcore' => self::$solrCoreId
+        ];
+
+        $templatePath = ExtensionManagementUtility::extPath('dlf') . 'Resources/Private/Templates/PageView/Main.html';
+        $view = $this->setUpTemplateView($templatePath);
+        $controller = $this->setUpController(PageViewController::class, $settings, '', $view);
+        $request = $this->setUpTemplateRequest('main', ['tx_dlf' => ['id' => 2001, 'page' => 1]]);
+
+        $response = $controller->processRequest($request);
+
+        $response->getBody()->rewind();
+        $actual = $response->getBody()->getContents();
+
+        $this->assertMatchesRegularExpression(
+            '/<div id="tx-dlf-map"[^>]*data-dlf-page-image-error="The page image could not be loaded because the image server is unavailable\."/',
+            $actual
+        );
     }
 }

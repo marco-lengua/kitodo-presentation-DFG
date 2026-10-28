@@ -3,7 +3,7 @@ description: 'This workflow triggers a Node.js build on a Pull Request to main t
 
 on:
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "7.x" ]
 
 jobs:
   build-check:
@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js from .nvmrc
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: 'Build/.nvmrc'
 

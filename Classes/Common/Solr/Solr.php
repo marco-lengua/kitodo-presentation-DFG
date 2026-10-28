@@ -33,12 +33,12 @@ use TYPO3\CMS\Core\Utility\MathUtility;
  *
  * @access public
  *
- * @property array $config this holds the Solr configuration
+ * @property mixed[] $config this holds the Solr configuration
  * @property-read string|null $core this holds the core name for the current instance
  * @property-write int $configPid this holds the PID for the configuration
  * @property int $limit this holds the max results
  * @property-read int $numberOfHits this holds the number of hits for last search
- * @property-write array $params this holds the additional query parameters
+ * @property-write mixed[] $params this holds the additional query parameters
  * @property-read bool $ready flag if the Solr service is instantiated successfully
  * @property-read Client $service this holds the Solr service object
  */
@@ -122,8 +122,10 @@ class Solr implements LoggerAwareInterface
      * @param string $core The name of the new core. If empty, the next available core name is used.
      *
      * @return string The name of the new core
+     *
+     * @throws \Exception If the core could not be created
      */
-    public static function createCore($core = ''): string
+    public static function createCore(string $core = ''): string
     {
         // Get next available core name if none given.
         if (empty($core)) {
@@ -147,7 +149,14 @@ class Solr implements LoggerAwareInterface
                 $action->setInstanceDir($core);
                 $query->setAction($action);
                 try {
-                    $response = $solrAdmin->service->coreAdmin($query);
+                    $previousErrorLevel = error_reporting(error_reporting() & ~E_DEPRECATED);
+                    try {
+                        $response = $solrAdmin->service->coreAdmin($query);
+                        error_reporting($previousErrorLevel);
+                    } catch (\Exception $e) {
+                        error_reporting($previousErrorLevel);
+                        throw $e;
+                    }
                     if ($response->getWasSuccessful()) {
                         // Core successfully created.
                         return $core;
@@ -177,6 +186,135 @@ class Solr implements LoggerAwareInterface
         // Permit operators: wildcard, boolean, fuzzy, proximity, boost, grouping
         // https://solr.apache.org/guide/solr/latest/query-guide/standard-query-parser.html
         return preg_replace('/(\{|}|\[|]|:|\/|\\\)/', '\\\$1', $query);
+    }
+
+    /**
+     * Split a virtual collection query string with leading Solr local parameter
+     * blocks (e.g. a {!join ...} block) into the trimmed local parameter prefix
+     * and the trimmed reference query remaining after the parameter blocks.
+     *
+     * @access public
+     *
+     * @param string $query the virtual collection query string
+     *
+     * @return array{0: string, 1: string} The local parameter prefix and the reference query
+     */
+    public static function splitJoinLocalParameters(string $query): array
+    {
+        preg_match('/^((?:\s*\{\![^}]*\})+)(.*)$/s', $query, $matches);
+        if (empty($matches)) {
+            return ['', trim($query)];
+        }
+        return [trim($matches[1]), trim($matches[2])];
+    }
+
+    /**
+     * Combine multiple join-based virtual collection query strings into a single
+     * join clause.
+     *
+     * Solr supports only a single join per clause, so the reference queries of all
+     * join-based collections are OR-combined into one merged join clause, led by
+     * the local parameter prefix of the first entry. A join-based collection whose
+     * local parameter blocks differ from the others nevertheless contributes its
+     * reference query: it is bridged by the single leading join on that join's
+     * `from` field, which is only a superset of the documents the collection's
+     * own (incompatible) join would reach. A debug notice is logged when this
+     * fallback happens.
+     *
+     * An empty input array means "no join-based collections" and the caller must
+     * then bypass the joined code path entirely; the empty string returned here
+     * is a sentinel, not a usable clause.
+     *
+     * @access public
+     *
+     * @param string[] $joinedQueries the virtual collection query strings with leading local parameter blocks
+     * @param \Psr\Log\LoggerInterface|null $logger used to log a debug notice when local parameter blocks differ
+     *
+     * @return string The merged join clause, or '' if $joinedQueries is empty
+     */
+    public static function combineJoinedCollections(array $joinedQueries, ?\Psr\Log\LoggerInterface $logger = null): string
+    {
+        if (empty($joinedQueries)) {
+            return '';
+        }
+        // Single join: preserve unchanged (safest).
+        if (count($joinedQueries) === 1) {
+            return trim($joinedQueries[0]);
+        }
+        // Split each join-based collection query string into the local
+        // parameter prefix and the trimmed reference query.
+        $parts = array_map(
+            static fn (string $joinedQuery): array => self::splitJoinLocalParameters($joinedQuery),
+            $joinedQueries
+        );
+        // The first join's local parameter prefix leads the merged clause;
+        // reference queries are combined via OR beneath that single join.
+        [$firstPrefix, $firstReference] = $parts[0];
+        $references = [self::parenthesise($firstReference)];
+        $differingPrefix = false;
+        foreach (array_slice($parts, 1) as $part) {
+            [$partPrefix, $partReference] = $part;
+            if (!empty($firstPrefix) && $partPrefix !== $firstPrefix) {
+                $differingPrefix = true;
+            }
+            $references[] = self::parenthesise($partReference);
+        }
+        if ($differingPrefix) {
+            $logger?->debug('Join-based virtual collections have different Solr local parameter blocks and cannot share a single join; combining their reference queries via OR (superset of matches)');
+        }
+        // The caller only passes strings that start with a local parameter
+        // block, so the first prefix is never empty here.
+        return trim($firstPrefix) . '(' . implode(' OR ', $references) . ')';
+    }
+
+    /**
+     * Ensure a Solr expression is wrapped in exactly one matching pair of
+     * top-level parentheses. If the string is already wrapped in a single
+     * spanning paren group, it is returned unchanged; otherwise it is wrapped.
+     *
+     * @access private
+     *
+     * @param string $expr the Solr expression
+     *
+     * @return string The expression wrapped in one top-level paren group
+     */
+    private static function parenthesise(string $expr): string
+    {
+        $expr = trim($expr);
+        if ($expr !== '' && self::isTopLevelParens($expr)) {
+            return $expr;
+        }
+        return '(' . $expr . ')';
+    }
+
+    /**
+     * Checks whether a Solr expression is already entirely wrapped in one
+     * matching top-level pair of parentheses.
+     *
+     * @access private
+     *
+     * @param string $expr The trimmed Solr expression
+     *
+     * @return bool True if a single top-level paren group spans the whole input
+     */
+    private static function isTopLevelParens(string $expr): bool
+    {
+        $len = strlen($expr);
+        if ($len < 2 || $expr[0] !== '(' || $expr[$len - 1] !== ')') {
+            return false;
+        }
+        $depth = 0;
+        for ($i = 0; $i < $len; $i++) {
+            if ($expr[$i] === '(') {
+                $depth++;
+            } elseif ($expr[$i] === ')') {
+                $depth--;
+                if ($depth === 0 && $i < $len - 1) {
+                    return false;
+                }
+            }
+        }
+        return $depth === 0;
     }
 
     /**
@@ -228,33 +366,24 @@ class Solr implements LoggerAwareInterface
         if (empty(self::$fields)) {
             $conf = GeneralUtility::makeInstance(ExtensionConfiguration::class)->get(self::$extKey, 'solr');
             $solrFields = $conf['fields'];
-            self::$fields['id'] = $solrFields['id'];
-            self::$fields['uid'] = $solrFields['uid'];
-            self::$fields['pid'] = $solrFields['pid'];
-            self::$fields['page'] = $solrFields['page'];
-            self::$fields['partof'] = $solrFields['partof'];
-            self::$fields['root'] = $solrFields['root'];
-            self::$fields['sid'] = $solrFields['sid'];
-            self::$fields['toplevel'] = $solrFields['toplevel'];
-            self::$fields['type'] = $solrFields['type'];
-            self::$fields['title'] = $solrFields['title'];
-            self::$fields['volume'] = $solrFields['volume'];
-            self::$fields['structure_path'] = $solrFields['structurePath'];
-            self::$fields['date'] = $solrFields['date'] ?? null;
-            self::$fields['thumbnail'] = $solrFields['thumbnail'];
-            self::$fields['default'] = $solrFields['default'];
-            self::$fields['timestamp'] = $solrFields['timestamp'];
-            self::$fields['autocomplete'] = $solrFields['autocomplete'];
-            self::$fields['fulltext'] = $solrFields['fulltext'];
-            self::$fields['record_id'] = $solrFields['recordId'];
-            self::$fields['purl'] = $solrFields['purl'];
-            self::$fields['urn'] = $solrFields['urn'];
-            self::$fields['location'] = $solrFields['location'];
-            self::$fields['collection'] = $solrFields['collection'];
-            self::$fields['license'] = $solrFields['license'];
-            self::$fields['terms'] = $solrFields['terms'];
-            self::$fields['restrictions'] = $solrFields['restrictions'];
-            self::$fields['geom'] = $solrFields['geom'];
+
+            // Define standard field mappings (config key → output key)
+            $fieldMap = [
+                'id', 'uid', 'pid', 'page', 'partof', 'root', 'sid', 'toplevel',
+                'type', 'title', 'volume', 'date', 'thumbnail', 'default',
+                'timestamp', 'autocomplete', 'fulltext', 'purl', 'urn',
+                'location', 'collection', 'license', 'terms', 'restrictions', 'geom'
+            ];
+
+            foreach ($fieldMap as $field) {
+                self::$fields[$field] = $solrFields[$field] ?? $field;
+            }
+
+            // Handle special mappings (camelCase → snake_case field name conversions)
+            self::$fields['logical_id'] = $solrFields['logicalId'] ?? 'logical_id';
+            self::$fields['physical_id'] = $solrFields['physicalId'] ?? 'physical_id';
+            self::$fields['structure_path'] = $solrFields['structurePath'] ?? 'structure_path';
+            self::$fields['record_id'] = $solrFields['recordId'] ?? 'record_id';
         }
 
         return self::$fields;
@@ -265,39 +394,33 @@ class Solr implements LoggerAwareInterface
      *
      * @access public
      *
-     * @param mixed $core Name or UID of the core to load or null to get core admin endpoint
+     * @param string|int|null $core Name or UID of the core to load or null to get core admin endpoint
      *
      * @return Solr Instance of this class
      */
-    public static function getInstance($core = null): Solr
+    public static function getInstance(mixed $core = null): Solr
     {
-        // Get core name if UID is given.
+        // Resolve a numeric core UID to its configured index name.
         if (MathUtility::canBeInterpretedAsInteger($core)) {
-            $core = Helper::getIndexNameFromUid($core, 'tx_dlf_solrcores');
+            $core = Helper::getIndexNameFromUid((int) $core, 'tx_dlf_solrcores');
         }
-        // Check if core is set or null.
-        if (
-            empty($core)
-            && $core !== null
-        ) {
+
+        // Reject empty string values while still allowing null to mean "no core".
+        /** @var ?string $core */
+        if ($core !== null && empty($core)) {
             Helper::error('Invalid core UID or name given for Apache Solr');
         }
-        if (!empty($core)) {
-            // Check if there is an instance in the registry already.
-            if (
-                array_key_exists($core, self::$registry)
-                && self::$registry[$core] instanceof self
-            ) {
-                // Return singleton instance if available.
-                return self::$registry[$core];
-            }
+
+        if (!empty($core) && array_key_exists($core, self::$registry)) {
+            return self::$registry[$core];
         }
-        // Create new instance...
+
         $instance = new self($core);
-        // ...and save it to registry.
+
         if (!empty($instance->core)) {
             self::$registry[$instance->core] = $instance;
         }
+
         return $instance;
     }
 
@@ -540,7 +663,7 @@ class Solr implements LoggerAwareInterface
      *
      * @return void
      */
-    public function __set(string $var, $value): void
+    public function __set(string $var, mixed $value): void
     {
         $method = 'magicSet' . ucfirst($var);
         if (
@@ -596,7 +719,14 @@ class Solr implements LoggerAwareInterface
         }
         $query->setAction($action);
         try {
-            $response = $this->service->coreAdmin($query);
+            $previousErrorLevel = error_reporting(error_reporting() & ~E_DEPRECATED);
+            try {
+                $response = $this->service->coreAdmin($query);
+                error_reporting($previousErrorLevel);
+            } catch (\Exception $e) {
+                error_reporting($previousErrorLevel);
+                throw $e;
+            }
             if ($response->getWasSuccessful()) {
                 // Solr is reachable, but is the core as well?
                 if ($core !== null) {

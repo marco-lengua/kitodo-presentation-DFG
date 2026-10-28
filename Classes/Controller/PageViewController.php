@@ -105,7 +105,6 @@ class PageViewController extends AbstractController
 
         $page = $this->requestData['page'] ?? 0;
 
-        $this->view->assign('viewData', $this->viewData);
         $this->view->assign('forceAbsoluteUrl', $this->extConf['general']['forceAbsoluteUrl'] ?? 0);
         $this->view->assign('docId', $this->requestData['id']);
         $this->view->assign('page', $page);
@@ -239,20 +238,7 @@ class PageViewController extends AbstractController
                     $score['pagebeginning'] = $doc->getPageBeginning($pageId, $loc);
                     $score['url'] = $doc->getFileLocation($loc);
                     if ($this->settings['useInternalProxy']) {
-                        // Configure @action URL for form.
-                        $uri = $this->uriBuilder->reset()
-                            ->setTargetPageUid($this->pageUid)
-                            ->setCreateAbsoluteUri(!empty($this->settings['forceAbsoluteUrl']) ? true : false)
-                            ->setArguments(
-                                [
-                                    'eID' => 'tx_dlf_pageview_proxy',
-                                    'url' => $score['url'],
-                                    'uHash' => GeneralUtility::hmac($score['url'], 'PageViewProxy')
-                                ]
-                            )
-                            ->build();
-
-                        $score['url'] = $uri;
+                        $this->configureProxyUrl($score['url']);
                     }
                 }
             }
@@ -278,26 +264,33 @@ class PageViewController extends AbstractController
         $fulltext = [];
         // Get fulltext link.
         $useGroups = $this->useGroupsConfiguration->getFulltext();
-        if (array_key_exists($page, $this->document->getCurrentDocument()->physicalStructure)) {
-            $physicalStructureInfo = $this->document->getCurrentDocument()->physicalStructureInfo[$this->document->getCurrentDocument()->physicalStructure[$page]];
-            $files = $physicalStructureInfo['files'];
-            while ($useGroup = array_shift($useGroups)) {
-                if (!empty($files[$useGroup])) {
-                    $file = $this->document->getCurrentDocument()->getFileInfo($files[$useGroup]);
-                    $fulltext['url'] = $file['location'];
-                    if ($this->settings['useInternalProxy']) {
-                        $this->configureProxyUrl($fulltext['url']);
+        $currentDocument = $this->document->getCurrentDocument();
+        if (array_key_exists($page, $currentDocument->physicalStructure)) {
+            $physicalStructureInfo = $currentDocument->physicalStructureInfo[$currentDocument->physicalStructure[$page]];
+            if (array_key_exists('files', $physicalStructureInfo)) {
+                $files = $physicalStructureInfo['files'];
+                while ($useGroup = array_shift($useGroups)) {
+                    if (!empty($files[$useGroup])) {
+                        $file = $currentDocument->getFileInfo($files[$useGroup]);
+                        $fulltext['url'] = $file['location'];
+                        if ($this->settings['useInternalProxy']) {
+                            $this->configureProxyUrl($fulltext['url']);
+                        }
+                        $fulltext['mimetype'] = $file['mimeType'];
+                        break;
+                    } else {
+                        $this->logger->notice('No full-text file found for page "' . $page . '" in fileGrp "' . $useGroup . '" in document "' . $this->document->getLocation() . '"');
                     }
-                    $fulltext['mimetype'] = $file['mimeType'];
-                    break;
-                } else {
-                    $this->logger->notice('No full-text file found for page "' . $page . '" in fileGrp "' . $useGroup . '"');
                 }
+            } else {
+                $this->logger->notice('No files found for page "' . $page . '" in document "' . $this->document->getLocation() . '"');
             }
+        } else {
+            $this->logger->notice('Page "' . $page . '" not found in document "' . $this->document->getLocation() . '"');
         }
 
         if (empty($fulltext)) {
-            $this->logger->notice('No full-text file found for page "' . $page . '" in fileGrps "' . ($this->extConf['files']['useGroupsFulltext'] ?? '') . '"');
+            $this->logger->notice('No full-text file found for page "' . $page . '" in fileGrps "' . ($this->extConf['files']['useGroupsFulltext'] ?? '') . '" in document "' . $this->document->getLocation() . '"');
         }
         return $fulltext;
     }
@@ -356,9 +349,10 @@ class PageViewController extends AbstractController
      */
     protected function getAnnotationContainers(int $page): array
     {
-        if ($this->document->getCurrentDocument() instanceof IiifManifest) {
-            $canvasId = $this->document->getCurrentDocument()->physicalStructure[$page];
-            $iiif = $this->document->getCurrentDocument()->getIiif();
+        $currentDocument = $this->document->getCurrentDocument();
+        if ($currentDocument instanceof IiifManifest) {
+            $canvasId = $currentDocument->physicalStructure[$page];
+            $iiif = $currentDocument->getIiif();
             if ($iiif instanceof ManifestInterface) {
                 $canvas = $iiif->getContainedResourceById($canvasId);
                 /** @var CanvasInterface $canvas */
@@ -372,16 +366,18 @@ class PageViewController extends AbstractController
                      *  On the other hand, server connections are potentially better than client connections. Downloading annotation lists
                      */
                     foreach ($canvas->getPossibleTextAnnotationContainers(Motivation::PAINTING) as $annotationContainer) {
-                        if (($textAnnotations = $annotationContainer->getTextAnnotations(Motivation::PAINTING)) != null) {
+                        $textAnnotations = $annotationContainer->getTextAnnotations(Motivation::PAINTING);
+                        if ($textAnnotations != null) {
                             foreach ($textAnnotations as $annotation) {
+                                $body  = $annotation->getBody();
                                 if (
-                                    $annotation->getBody()->getFormat() == 'text/plain'
-                                    && $annotation->getBody()->getChars() != null
+                                    $body->getFormat() == 'text/plain'
+                                    && $body->getChars() != null
                                 ) {
-                                    $annotationListData = [];
-                                    $annotationListData['uri'] = $annotationContainer->getId();
-                                    $annotationListData['label'] = $annotationContainer->getLabelForDisplay();
-                                    $annotationContainers[] = $annotationListData;
+                                    $annotationContainers[] = [
+                                        'uri' => $annotationContainer->getId(),
+                                        'label' => $annotationContainer->getLabelForDisplay(),
+                                    ];
                                     break;
                                 }
                             }
@@ -455,12 +451,13 @@ class PageViewController extends AbstractController
      */
     private function fetchFileInfo(int $page, string $fileGrpImages, ?MetsDocument $specificDoc): ?array
     {
+        $currentDocument = $this->document->getCurrentDocument();
         // Get the physical structure info for the specified page
         if ($specificDoc) {
             $physicalStructureInfo = $specificDoc->physicalStructureInfo[$specificDoc->physicalStructure[$page]];
         } else {
-            if (array_key_exists($page, $this->document->getCurrentDocument()->physicalStructure)) {
-                $physicalStructureInfo = $this->document->getCurrentDocument()->physicalStructureInfo[$this->document->getCurrentDocument()->physicalStructure[$page]];
+            if (array_key_exists($page, $currentDocument->physicalStructure)) {
+                $physicalStructureInfo = $currentDocument->physicalStructureInfo[$currentDocument->physicalStructure[$page]];
             }
         }
 
@@ -471,7 +468,7 @@ class PageViewController extends AbstractController
             if ($specificDoc) {
                 return $specificDoc->getFileInfo($files[$fileGrpImages]);
             } else {
-                return $this->document->getCurrentDocument()->getFileInfo($files[$fileGrpImages]);
+                return $currentDocument->getFileInfo($files[$fileGrpImages]);
             }
         }
 

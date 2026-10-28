@@ -19,6 +19,7 @@ use Kitodo\Dlf\Tests\Functional\FunctionalTestCase;
 use Kitodo\Dlf\Tests\Functional\Api\OaiPmhTypo3Client;
 use Phpoaipmh\Endpoint;
 use Phpoaipmh\Exception\OaipmhException;
+use PHPUnit\Framework\Attributes\Test;
 use TYPO3\TestingFramework\Core\Functional\Framework\Frontend\InternalRequest;
 
 class OaiPmhTest extends FunctionalTestCase
@@ -96,9 +97,7 @@ class OaiPmhTest extends FunctionalTestCase
         $this->persistenceManager->persistAll();
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function correctlyRespondsOnBadVerb()
     {
         $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this, false);
@@ -116,9 +115,7 @@ class OaiPmhTest extends FunctionalTestCase
         self::assertEmpty($xml->request->attributes());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function canIdentify()
     {
         $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this);
@@ -130,9 +127,7 @@ class OaiPmhTest extends FunctionalTestCase
         self::assertEquals('default-library@example.com', (string) $identity->Identify->adminEmail);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function identifyGivesFallbackDatestampWhenNoDocuments()
     {
         $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPageNoStoragePid, $this);
@@ -141,9 +136,7 @@ class OaiPmhTest extends FunctionalTestCase
         self::assertUtcDateString((string) $identity->Identify->earliestDatestamp);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function canListMetadataFormats()
     {
         $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this);
@@ -157,9 +150,7 @@ class OaiPmhTest extends FunctionalTestCase
         self::assertEquals('http://www.loc.gov/METS/', (string) $formatMap['mets']->metadataNamespace);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function canListRecords()
     {
         $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this);
@@ -171,9 +162,49 @@ class OaiPmhTest extends FunctionalTestCase
         self::assertEquals('mets', $metsRoot->getName());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
+    public function canGetRecord()
+    {
+        $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this);
+        $xml = (new Endpoint($client))->getRecord('oai:de:slub-dresden:db:id-476251419', 'mets');
+
+        $record = $xml->GetRecord->record;
+        self::assertNotEmpty($record);
+        self::assertEquals('oai:de:slub-dresden:db:id-476251419', (string) $record->header->identifier);
+        self::assertEquals('2021-09-16T06:50:00Z', (string) $record->header->datestamp);
+        self::assertEquals(['collection-with-single-document', 'music'], (array) $record->header->setSpec);
+        self::assertNotEmpty($record->metadata);
+    }
+
+    #[Test]
+    public function getRecordGivesErrorForUnknownIdentifier()
+    {
+        $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this, false);
+        $xml = $client->request(
+            'GetRecord',
+            [
+                'identifier' => 'oai:de:slub-dresden:db:id-doesnotexist',
+                'metadataPrefix' => 'mets',
+            ]
+        );
+
+        self::assertEquals('idDoesNotExist', (string) $xml->error['code']);
+        self::assertFalse(isset($xml->GetRecord));
+    }
+
+    #[Test]
+    public function getRecordGivesErrorForUnknownMetadataPrefix()
+    {
+        $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this, false);
+        $xml = $client->request('GetRecord', [
+            'identifier' => 'oai:de:slub-dresden:db:id-476251419',
+            'metadataPrefix' => 'unknown_prefix',
+        ]);
+
+        self::assertEquals('cannotDisseminateFormat', (string) $xml->error['code']);
+    }
+
+    #[Test]
     public function noRecordsUntil1900()
     {
         $this->expectException(OaipmhException::class);
@@ -185,9 +216,7 @@ class OaiPmhTest extends FunctionalTestCase
         $result->current();
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function canUseResumptionToken()
     {
         // NOTE: cursor and expirationDate are optional by the specification,
@@ -230,9 +259,7 @@ class OaiPmhTest extends FunctionalTestCase
         }
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function noResumptionTokenForCompleteList()
     {
         $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this);
@@ -245,9 +272,7 @@ class OaiPmhTest extends FunctionalTestCase
         }
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function canListAndResumeIdentifiers()
     {
         $client = new OaiPmhTypo3Client($this->baseUrl, $this->oaiPage, $this);

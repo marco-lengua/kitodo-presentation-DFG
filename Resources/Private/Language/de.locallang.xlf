@@ -109,6 +109,14 @@
                 <source><![CDATA[Subscribe to the RSS feed of this collection!]]></source>
                 <target><![CDATA[Abonnieren Sie den RSS-Feed dieser Kollektion!]]></target>
             </trans-unit>
+            <trans-unit id="collection.solr.error" approved="yes">
+                <source><![CDATA[Solr Error]]></source>
+                <target><![CDATA[Solr Fehler]]></target>
+            </trans-unit>
+            <trans-unit id="collection.solr.errorDescription" approved="yes">
+                <source><![CDATA[Currently the Solr server is not available.]]></source>
+                <target><![CDATA[Der Solr-Server ist derzeit nicht verfügbar.]]></target>
+            </trans-unit>
             <trans-unit id="collection.title" approved="yes">
                 <source><![CDATA[title]]></source>
                 <target><![CDATA[Titel]]></target>
@@ -213,6 +221,14 @@
                 <source><![CDATA[Nothing found.]]></source>
                 <target><![CDATA[Keine Treffer.]]></target>
             </trans-unit>
+            <trans-unit id="multiview.dragging_label"  approved="yes">
+                <source><![CDATA[Drag Document]]></source>
+                <target><![CDATA[Dokument verschieben]]></target>
+            </trans-unit>
+            <trans-unit id="multiview.remove_document" approved="yes">
+                <source><![CDATA[Remove Document]]></source>
+                <target><![CDATA[Dokument entfernen]]></target>
+            </trans-unit>
             <trans-unit id="navigation.document.back" approved="yes">
                 <source><![CDATA[Previous document]]></source>
                 <target><![CDATA[Vorheriges Dokument]]></target>
@@ -285,53 +301,85 @@
                 <source><![CDATA[Create structures]]></source>
                 <target><![CDATA[Strukturdaten Konfiguration anlegen]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.formatOkay" approved="yes">
+            <trans-unit id="newTenant.formatFound" approved="yes">
                 <source><![CDATA[Default namespaces found!]]></source>
                 <target><![CDATA[Standard-Namensräume gefunden!]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.formatOkayMsg" approved="yes">
+            <trans-unit id="newTenant.formatFoundMsg" approved="yes">
                 <source><![CDATA[The namespace definitions for MODS, TEIHDR and ALTO do exist.]]></source>
                 <target><![CDATA[Die Standard-Namensräume für MODS, TEIHDR und ALTO sind definiert.]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.formatNotOkay" approved="yes">
+            <trans-unit id="newTenant.formatNotFound" approved="yes">
                 <source><![CDATA[Default namespaces not found!]]></source>
                 <target><![CDATA[Standard-Namensräume nicht gefunden!]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.formatNotOkayMsg" approved="yes">
+            <trans-unit id="newTenant.formatNotFoundMsg" approved="yes">
                 <source><![CDATA[The namespace definitions for MODS, TEIHDR and/or ALTO do not exist and could not be created.]]></source>
                 <target><![CDATA[Die Standard-Namensräume für MODS, TEIHDR und/oder ALTO konnten nicht definiert werden.]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.metadataOkay" approved="yes">
+            <trans-unit id="newTenant.metadataFound" approved="yes">
                 <source><![CDATA[Metadata found!]]></source>
                 <target><![CDATA[Metadaten gefunden!]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.metadataOkayMsg" approved="yes">
+            <trans-unit id="newTenant.metadataFoundMsg" approved="yes">
                 <source><![CDATA[There are configuration records for bibliographic metadata. They can be edited in the list module.]]></source>
                 <target><![CDATA[Es ist eine Konfiguration für Metadaten vorhanden. Über das Listenmodul können neue Datensätze hinzugefügt und die vorhandenen editiert werden.]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.metadataNotOkay" approved="yes">
+            <trans-unit id="newTenant.metadataMissing" approved="yes">
+                <source><![CDATA[Some metadata not found!]]></source>
+                <target><![CDATA[Einige Metadaten nicht gefunden!]]></target>
+            </trans-unit>
+            <trans-unit id="newTenant.metadataMissingMsg" approved="yes">
+                <source><![CDATA[There are some missing configuration records for bibliographic metadata. If it is not intentionally then they can be added automatically.]]></source>
+                <target><![CDATA[Es gibt einige fehlende Konfigurationsdatensätze für bibliografische Metadaten. Falls dies nicht beabsichtigt ist, können sie automatisch hinzugefügt werden.]]></target>
+            </trans-unit>
+            <trans-unit id="newTenant.metadataNotFound" approved="yes">
                 <source><![CDATA[No metadata found!]]></source>
                 <target><![CDATA[Keine Metadaten gefunden!]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.metadataNotOkayMsg" approved="yes">
+            <trans-unit id="newTenant.metadataNotFoundMsg" approved="yes">
                 <source><![CDATA[There are no configuration records for bibliographic metadata. A basic configuration can be added automatically.]]></source>
                 <target><![CDATA[Es wurde keine Konfiguration für Metadaten gefunden. Eine Grundkonfiguration kann automatisch angelegt werden.]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.solrcoreOkay" approved="yes">
+            <trans-unit id="newTenant.solrCoreFound" approved="yes">
                 <source><![CDATA[Solr core found!]]></source>
                 <target><![CDATA[Solr Kern gefunden!]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.solrcoreOkayMsg" approved="yes">
+            <trans-unit id="newTenant.solrCoreFoundMsg" approved="yes">
                 <source><![CDATA[There are configuration records for Solr cores. They can be edited in the list module.]]></source>
                 <target><![CDATA[Es wurde die Konfiguration für einen Solr Kern gefunden. Über das Listenmodul können neue Datensätze hinzugefügt und die vorhandenen editiert werden.]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.solrcoreNotOkay" approved="yes">
+            <trans-unit id="newTenant.solrCoreNotFound" approved="yes">
                 <source><![CDATA[No Solr core found!]]></source>
                 <target><![CDATA[Kein Solr Kern gefunden!]]></target>
             </trans-unit>
-            <trans-unit id="newTenant.solrcoreNotOkayMsg" approved="yes">
+            <trans-unit id="newTenant.solrCoreNotFoundMsg" approved="yes">
                 <source><![CDATA[There is no Solr core configured. For the search plugin at least one Solr core is needed. It can be created automatically.]]></source>
                 <target><![CDATA[Es wurde kein Solr Kern gefunden. Ohne Solr Kern kann das Plugin zur Recherche in den Meta- und Strukturdaten nicht verwendet werden. Ein Solr Kern kann automatisch angelegt werden.]]></target>
+            </trans-unit>
+            <trans-unit id="newTenant.structureFound" approved="yes">
+                <source><![CDATA[Structures found!]]></source>
+                <target><![CDATA[Strukturdaten gefunden!]]></target>
+            </trans-unit>
+            <trans-unit id="newTenant.structureFoundMsg" approved="yes">
+                <source><![CDATA[There are configuration records for structural metadata. They can be edited in the list module.]]></source>
+                <target><![CDATA[Es ist eine Konfiguration für Strukturdaten vorhanden. Über das Listenmodul können neue Datensätze hinzugefügt und die vorhandenen editiert werden.]]></target>
+            </trans-unit>
+            <trans-unit id="newTenant.structureMissing" approved="yes">
+                <source><![CDATA[Some structures not found!]]></source>
+                <target><![CDATA[Einige Strukturdaten wurden nicht gefunden!]]></target>
+            </trans-unit>
+            <trans-unit id="newTenant.structureMissingMsg" approved="yes">
+                <source><![CDATA[There are some missing configuration records for structural metadata. If it is not intentionally then they can be added automatically.]]></source>
+                <target><![CDATA[Einige Konfigurationen für Strukturdaten fehlen. Falls dies nicht beabsichtigt ist, können sie automatisch hinzugefügt werden.]]></target>
+            </trans-unit>
+            <trans-unit id="newTenant.structureNotFound" approved="yes">
+                <source><![CDATA[No structures found!]]></source>
+                <target><![CDATA[Keine Strukturdaten gefunden!]]></target>
+            </trans-unit>
+            <trans-unit id="newTenant.structureNotFoundMsg" approved="yes">
+                <source><![CDATA[There are no configuration records for structural metadata. A basic configuration can be added automatically.]]></source>
+                <target><![CDATA[Es wurde keine Konfiguration für Strukturdaten gefunden. Eine Grundkonfiguration kann automatisch angelegt werden.]]></target>
             </trans-unit>
             <trans-unit id="newTenant.wrongPageType" approved="yes">
                 <source><![CDATA[Page is no Folder!]]></source>
@@ -340,22 +388,6 @@
             <trans-unit id="newTenant.wrongPageTypeMsg" approved="yes">
                 <source><![CDATA[The configuration records of Kitodo.Presentation need to be stored in a Folder.]]></source>
                 <target><![CDATA[Die Konfigurationsdatensätze von Kitodo.Presentation müssen in Ordnern abgelegt werden.]]></target>
-            </trans-unit>
-            <trans-unit id="newTenant.structureOkay" approved="yes">
-                <source><![CDATA[Structures found!]]></source>
-                <target><![CDATA[Strukturdaten gefunden!]]></target>
-            </trans-unit>
-            <trans-unit id="newTenant.structureOkayMsg" approved="yes">
-                <source><![CDATA[There are configuration records for structural metadata. They can be edited in the list module.]]></source>
-                <target><![CDATA[Es ist eine Konfiguration für Strukturdaten vorhanden. Über das Listenmodul können neue Datensätze hinzugefügt und die vorhandenen editiert werden.]]></target>
-            </trans-unit>
-            <trans-unit id="newTenant.structureNotOkay" approved="yes">
-                <source><![CDATA[No structures found!]]></source>
-                <target><![CDATA[Keine Strukturdaten gefunden!]]></target>
-            </trans-unit>
-            <trans-unit id="newTenant.structureNotOkayMsg" approved="yes">
-                <source><![CDATA[There are no configuration records for structural metadata. A basic configuration can be added automatically.]]></source>
-                <target><![CDATA[Es wurde keine Konfiguration für Strukturdaten gefunden. Eine Grundkonfiguration kann automatisch angelegt werden.]]></target>
             </trans-unit>
             <trans-unit id="oaiPmh.badArgument" approved="yes">
                 <source><![CDATA[The request includes illegal arguments, is missing required arguments, or values for arguments have an illegal syntax.]]></source>
@@ -397,9 +429,17 @@
                 <source><![CDATA[Page]]></source>
                 <target><![CDATA[Seite]]></target>
             </trans-unit>
+            <trans-unit id="pageGrid.thumbnailError" approved="yes">
+                <source><![CDATA[The page image could not be loaded because the image server is unavailable.]]></source>
+                <target><![CDATA[Das Seitenbild konnte nicht geladen werden, da der Bildserver derzeit nicht verfügbar ist.]]></target>
+            </trans-unit>
             <trans-unit id="pageview.overview-map" approved="yes">
                 <source><![CDATA[Overview Map]]></source>
                 <target><![CDATA[Miniaturansicht]]></target>
+            </trans-unit>
+            <trans-unit id="pageview.imageError" approved="yes">
+                <source><![CDATA[The page image could not be loaded because the image server is unavailable.]]></source>
+                <target><![CDATA[Das Seitenbild konnte nicht geladen werden, da der Bildserver derzeit nicht verfügbar ist.]]></target>
             </trans-unit>
             <trans-unit id="search.dateFrom" approved="yes">
                 <source><![CDATA[From]]></source>
@@ -492,6 +532,10 @@
             <trans-unit id="toolbox.fulltext.loading" approved="yes">
                 <source><![CDATA[Loading full text...]]></source>
                 <target><![CDATA[Volltext wird geladen...]]></target>
+            </trans-unit>
+            <trans-unit id="toolbox.fulltext.missing" approved="yes">
+                <source><![CDATA[Full text not available for this page]]></source>
+                <target><![CDATA[Volltext nicht verfügbar für diese Seite]]></target>
             </trans-unit>
             <trans-unit id="toolbox.fulltext.notAvailable" approved="yes">
                 <source><![CDATA[No full text available]]></source>
@@ -649,29 +693,37 @@
                 <source><![CDATA[Zoom Out]]></source>
                 <target><![CDATA[Ansicht verkleinern]]></target>
             </trans-unit>
-            <trans-unit id="validationForm.headline.success" approved="yes">
+            <trans-unit id="validation.form.headline.success" approved="yes">
                 <source><![CDATA[Successful]]></source>
                 <target><![CDATA[Erfolgreich]]></target>
             </trans-unit>
-            <trans-unit id="validationForm.headline.error" approved="yes">
+            <trans-unit id="validation.form.headline.error" approved="yes">
                 <source><![CDATA[Error]]></source>
                 <target><![CDATA[Fehler]]></target>
             </trans-unit>
-            <trans-unit id="validationForm.headline.warning" approved="yes">
+            <trans-unit id="validation.form.headline.warning" approved="yes">
                 <source><![CDATA[Warning]]></source>
                 <target><![CDATA[Warnung]]></target>
             </trans-unit>
-            <trans-unit id="validationForm.headline.notice" approved="yes">
+            <trans-unit id="validation.form.headline.notice" approved="yes">
                 <source><![CDATA[Notice]]></source>
                 <target><![CDATA[Info]]></target>
             </trans-unit>
-            <trans-unit id="validationForm.label" approved="yes">
+            <trans-unit id="validation.form.label" approved="yes">
                 <source><![CDATA[Insert the link to your <acronym href="" title="metadata encoding and transmission standard">METS</acronym> file here:]]></source>
                 <target><![CDATA[Fügen Sie hier den Link zu Ihrer <acronym title="Metadatenkodierungs- und -übertragungsstandard">METS</acronym>-Datei ein:]]></target>
             </trans-unit>
-            <trans-unit id="validationForm.validate" approved="yes">
+            <trans-unit id="validation.form.validate" approved="yes">
                 <source><![CDATA[validate]]></source>
                 <target><![CDATA[Validieren]]></target>
+            </trans-unit>
+            <trans-unit id="validation.form.error.generic" approved="yes">
+                <source><![CDATA[The validation request could not be completed. Please check the URL and try again.]]></source>
+                <target><![CDATA[Die Validierungsanfrage konnte nicht abgeschlossen werden. Bitte prüfen Sie die URL und versuchen Sie es erneut.]]></target>
+            </trans-unit>
+            <trans-unit id="validation.form.error.timeout" approved="yes">
+                <source><![CDATA[The validation request timed out. Please try again.]]></source>
+                <target><![CDATA[Die Validierungsanfrage ist abgelaufen. Bitte versuchen Sie es erneut.]]></target>
             </trans-unit>
         </body>
     </file>

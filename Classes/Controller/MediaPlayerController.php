@@ -32,7 +32,8 @@ class MediaPlayerController extends AbstractController
 {
     public function __construct(
         protected readonly MediaPlayerService $mediaPlayerService
-    ) {
+    )
+    {
     }
 
     /**
@@ -102,14 +103,21 @@ class MediaPlayerController extends AbstractController
         // Get additional audio/video-media URLs
         $mediaUrl = $this->collectAdditionalMediaUrls($doc, $pageNo, $thumbnailUseGroups, $waveformUseGroups, $imageUseGroups);
 
-        return [
-            'start' => $mediaChapters[$pageNo - 1]['timecode'] ?? '',
+        $media = [
             'mode' => $this->mediaPlayerService->determineInitialMode($mediaplayerSources, $mainVideoUseGroup),
             'chapters' => $mediaChapters,
             'metadata' => $doc->getToplevelMetadata(),
             'sources' => $mediaplayerSources,
             'url' => $mediaUrl,
         ];
+
+        // Determine the start timecode for the current page, if available
+        $startTimecode = $mediaChapters[$pageNo - 1]['timecode'] ?? null;
+        if ($startTimecode !== null && $startTimecode !== '') {
+            $media['start'] = $startTimecode;
+        }
+
+        return $media;
     }
 
 
@@ -181,13 +189,13 @@ class MediaPlayerController extends AbstractController
      */
     protected function recurseChapters(array $logInfo, array &$outChapters): void
     {
-        if (empty($logInfo['children']) && isset($logInfo['videoChapter'])) {
+        if (empty($logInfo['children']) && isset($logInfo['mediaChapter'])) {
             $outChapters[] = [
-                'fileIds' => $logInfo['videoChapter']['fileIds'],
-                'fileIdsJoin' => $logInfo['videoChapter']['fileIdsJoin'],
+                'fileIds' => $logInfo['mediaChapter']['fileIds'],
+                'fileIdsJoin' => $logInfo['mediaChapter']['fileIdsJoin'],
                 'pageNo' => $logInfo['points'],
                 'title' => $logInfo['label'] ?? '',
-                'timecode' => $logInfo['videoChapter']['timecode'],
+                'timecode' => $logInfo['mediaChapter']['timecode'],
             ];
         }
 

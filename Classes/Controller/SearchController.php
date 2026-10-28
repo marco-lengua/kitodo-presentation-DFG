@@ -137,21 +137,7 @@ class SearchController extends AbstractController
             $this->request->getAttribute('frontend.user')->setKey('ses', 'search', $this->search);
         }
 
-        $this->search = is_array($this->search) ? $this->search : [];
-
-        // sanitize date search input
-        $dateFrom = $this->search['dateFrom'] ?? false;
-        $dateTo = $this->search['dateTo'] ?? false;
-        if ($dateFrom || $dateTo) {
-            if (!$dateFrom && $dateTo) {
-                $this->search['dateFrom'] = '*';
-            } elseif ($dateFrom && !$dateTo) {
-                $this->search['dateTo'] = '*';
-            } elseif ($dateFrom > $dateTo) {
-                $this->search['dateFrom'] = $dateTo;
-                $this->search['dateTo'] = $dateFrom;
-            }
-        }
+        $this->sanitizeDates();
 
         // Pagination of Results: Pass the currentPage to the fluid template to calculate current index of search result.
         $currentPage = $this->getIntParameterSafely('page');
@@ -207,27 +193,40 @@ class SearchController extends AbstractController
             $this->view->assign('listedMetadata', $listedMetadata);
             $this->view->assign('sortableMetadata', $sortableMetadata);
 
-            // Add the facets menu
             $this->addFacetsMenu();
         }
 
-        // Add the current document if present to fluid. This way, we can limit further searches to this document.
-        if (isset($this->requestData['id'])) {
-            $currentDocument = $this->documentRepository->findByUid($this->requestData['id']);
-            $this->view->assign('currentDocument', $currentDocument);
-        }
+        $this->addCurrentDocument();
 
-        $this->view->assign('viewData', $this->viewData);
+        $this->view->assign('requestData', $this->requestData);
+        $this->view->assign('uniqueId', $this->uniqueId);
 
         return $this->htmlResponse();
     }
 
     /**
+     * Add the current document if present to fluid. It limits further searches to this document.
+     *
+     * @access private
+     *
+     * @return void
+     */
+    private function addCurrentDocument(): void
+    {
+        if (isset($this->requestData['id'])) {
+            $currentDocument = $this->documentRepository->findByUid($this->requestData['id']);
+            $this->view->assign('currentDocument', $currentDocument);
+        }
+    }
+
+    /**
      * Adds the facets menu to the search form
      *
-     * @access protected
+     * @access private
+     *
+     * @return void
      */
-    protected function addFacetsMenu(): void
+    private function addFacetsMenu(): void
     {
         // Quit without doing anything if no facets are configured.
         if (empty($this->settings['facets']) && empty($this->settings['facetCollections'])) {
@@ -404,10 +403,32 @@ class SearchController extends AbstractController
         if ($collections) {
             $collectionsQueryString = '';
             $virtualCollectionsQueryString = '';
+            // A virtual collection string using a Solr local parameter such as a
+            // {!join} block cannot be wrapped in parentheses or OR-combined behind
+            // another query, so join-based collections are collected and merged into
+            // one joined clause (see below).
+            $joinedCollectionQueryStrings = [];
             foreach ($collections as $collectionEntry) {
                 // check for virtual collections query string
                 /** @var Collection $collectionEntry */
                 if ($collectionEntry->getIndexSearch()) {
+                    if (str_contains($collectionEntry->getIndexSearch(), '{!join')) {
+                        // A Solr local parameter such as a {!join} block may only appear as the
+                        // leading, unparenthesised token of a clause: wrapping it in
+                        // parentheses, OR-combining it behind another query or combining it
+                        // with a second join makes the whole clause unparseable. Join-based
+                        // collections are therefore merged into a single joined clause below,
+                        // unless plain browsing lists the root documents which the reference
+                        // part alone already reaches.
+                        if (!empty($query)) {
+                            $joinedCollectionQueryStrings[] = $collectionEntry->getIndexSearch();
+                            continue;
+                        }
+                        $virtualCollectionsQueryString .= empty($virtualCollectionsQueryString)
+                            ? '(' . $this->stripJoinLocalParameters($collectionEntry->getIndexSearch()) . ')'
+                            : ' OR (' . $this->stripJoinLocalParameters($collectionEntry->getIndexSearch()) . ')';
+                        continue;
+                    }
                     $virtualCollectionsQueryString .= empty($virtualCollectionsQueryString) ? '(' . $collectionEntry->getIndexSearch() . ')' : ' OR (' . $collectionEntry->getIndexSearch() . ')';
                 } else {
                     $collectionsQueryString .= empty($collectionsQueryString) ? '"' . $collectionEntry->getIndexName() . '"' : ' OR "' . $collectionEntry->getIndexName() . '"';
@@ -428,10 +449,39 @@ class SearchController extends AbstractController
                 $virtualCollectionsQueryString = '(' . $virtualCollectionsQueryString . ')';
             }
 
-            // combine both querystrings into a single filterquery via OR if both are given, otherwise pass either of those
-            return implode(" OR ", array_filter([$collectionsQueryString, $virtualCollectionsQueryString]));
+            // join-based virtual collections: combine the collected query strings into
+            // a single joined clause that has to lead the resulting filter query
+            $joinedCollectionQueryString = Solr::combineJoinedCollections($joinedCollectionQueryStrings, $this->logger);
+
+            if (empty($joinedCollectionQueryString)) {
+                // combine both querystrings into a single filterquery via OR if both are given, otherwise pass either of those
+                return implode(" OR ", array_filter([$collectionsQueryString, $virtualCollectionsQueryString]));
+            }
+
+            // A joined clause must lead the clause, so it is passed through unchanged;
+            // any regular/virtual collection query is OR-combined behind it (already
+            // parenthesised above, the join must not be parenthesised).
+            $remainder = implode(" OR ", array_filter([$collectionsQueryString, $virtualCollectionsQueryString]));
+
+            return empty($remainder) ? $joinedCollectionQueryString : $joinedCollectionQueryString . ' OR ' . $remainder;
         }
         return "";
+    }
+
+    /**
+     * Strip leading Solr local parameter blocks (e.g. {!join ...}) including any
+     * leading whitespace, so that only the reference query of a join-based
+     * virtual collection query string remains.
+     *
+     * @access private
+     *
+     * @param string $query the virtual collection query string
+     *
+     * @return string the query string without leading local parameter blocks
+     */
+    private function stripJoinLocalParameters(string $query): string
+    {
+        return trim(preg_replace('/^(\s*\{\![^}]*\})+/', '', $query));
     }
 
     /**
@@ -526,6 +576,33 @@ class SearchController extends AbstractController
             }
         }
         return $menuArray;
+    }
+
+    /**
+     * Sanitize date search input.
+     *
+     * @access private
+     *
+     * @return void
+     */
+    private function sanitizeDates(): void
+    {
+        $dateFrom = $this->search['dateFrom'] ?? false;
+        $dateTo = $this->search['dateTo'] ?? false;
+        if ($dateFrom || $dateTo) {
+            if (!$dateFrom && $dateTo) {
+                $this->search['dateFrom'] = '*';
+            }
+
+            if ($dateFrom && !$dateTo) {
+                $this->search['dateTo'] = '*';
+            }
+
+            if ($dateFrom && $dateTo && $dateFrom > $dateTo) {
+                $this->search['dateFrom'] = $dateTo;
+                $this->search['dateTo'] = $dateFrom;
+            }
+        }
     }
 
     /**

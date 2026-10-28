@@ -32,7 +32,7 @@ $iconArray = [
     'tx-dlf-statistics' => 'EXT:dlf/Resources/Public/Icons/tx-dlf-statistics.svg',
     'tx-dlf-tableofcontents' => 'EXT:dlf/Resources/Public/Icons/tx-dlf-tableofcontents.svg',
     'tx-dlf-toolbox' => 'EXT:dlf/Resources/Public/Icons/tx-dlf-toolbox.svg',
-    'tx-dlf-validationform' => 'EXT:dlf/Resources/Public/Icons/tx-dlf-validationform.svg',
+    'tx-dlf-validation' => 'EXT:dlf/Resources/Public/Icons/tx-dlf-validation.svg',
 ];
 $iconRegistry = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(
     \TYPO3\CMS\Core\Imaging\IconRegistry::class
@@ -103,10 +103,6 @@ $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\Kitodo\Dlf\Task
     'description' => 'LLL:EXT:dlf/Resources/Private/Language/locallang_tasks.xlf:suggestBuildTask.description',
     'additionalFields' => \Kitodo\Dlf\Task\SuggestBuildAdditionalFieldProvider::class,
 ];
-// Register AJAX eID handlers.
-if ($GLOBALS['TYPO3_CONF_VARS']['EXTENSIONS']['dlf']['general']['enableInternalProxy'] ?? false) {
-    $GLOBALS['TYPO3_CONF_VARS']['FE']['eID_include']['tx_dlf_pageview_proxy'] = \Kitodo\Dlf\Eid\PageViewProxy::class . '::main';
-}
 // Use Caching Framework for Solr queries
 $GLOBALS['TYPO3_CONF_VARS']['SYS']['caching']['cacheConfigurations']['tx_dlf_solr'] ??= [];
 
@@ -352,13 +348,13 @@ $GLOBALS['TYPO3_CONF_VARS']['SYS']['formEngine']['nodeRegistry'][] = [
 
 \TYPO3\CMS\Extbase\Utility\ExtensionUtility::configurePlugin(
     'Dlf',
-    'ValidationForm',
+    'Validation',
     [
-        \Kitodo\Dlf\Controller\ValidationFormController::class => 'main',
+        \Kitodo\Dlf\Controller\ValidationController::class => 'main',
     ],
     // non-cacheable actions
     [
-        \Kitodo\Dlf\Controller\ValidationFormController::class => '',
+        \Kitodo\Dlf\Controller\ValidationController::class => '',
     ]
 );
 
